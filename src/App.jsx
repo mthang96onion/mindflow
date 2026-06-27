@@ -445,7 +445,7 @@ export default function App() {
       showToast('Chưa chọn sự kiện để phân tích!', 'error');
       return;
     }
-    const log = logs.find(l => l.id === selectedEventId);
+    const log = logs.find(l => String(l.id) === String(selectedEventId));
     if (!log) return;
 
     setIsLoadingEventAnalysis(true);

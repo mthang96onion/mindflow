@@ -1224,7 +1224,7 @@
         return;
       }
       
-      const log = getLogs().find(l => l.id === logId);
+      const log = getLogs().find(l => String(l.id) === String(logId));
       if (!log) return;
       
       const box = document.getElementById('event-analysis-box');
