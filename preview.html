@@ -921,7 +921,6 @@
         // Gửi văn bản lấy lời khuyên tức thời (không lưu văn bản này)
         fetch(apiUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: "getInstantAdvice",
             text: text,
@@ -1243,7 +1242,6 @@
       if (apiUrl) {
         fetch(apiUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: "analyzeEvent",
             log: log
