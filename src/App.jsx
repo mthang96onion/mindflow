@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Settings, Zap, BookOpen, Check, ShieldAlert, ChevronRight, 
-  Flame, TrendingUp, Sparkles, Bot, Loader, Info, X, AlertTriangle 
+  Flame, TrendingUp, Sparkles, Bot, Loader, Info, X, AlertTriangle, Brain 
 } from 'lucide-react';
 
 // Dữ liệu mẫu ban đầu nếu localStorage chưa có
@@ -38,11 +38,19 @@ export default function App() {
   const [dumpTag, setDumpTag] = useState('');
   const [dumpText, setDumpText] = useState('');
   const [isWiping, setIsWiping] = useState(false);
+  const [showInstantAdviceModal, setShowInstantAdviceModal] = useState(false);
+  const [instantAdviceData, setInstantAdviceData] = useState(null);
+  const [instantAdviceTone, setInstantAdviceTone] = useState('serious');
 
   // Tab 3 (AI Oracle) State
-  const [oracleTone, setOracleTone] = useState('serious');
+  const [oracleSubTab, setOracleSubTab] = useState('overview'); // 'overview' | 'event'
   const [oracleAdvice, setOracleAdvice] = useState(null);
   const [isLoadingAdvice, setIsLoadingAdvice] = useState(false);
+  
+  // Tab 3 Event Analysis State
+  const [selectedEventId, setSelectedEventId] = useState('');
+  const [eventAnalysisData, setEventAnalysisData] = useState(null);
+  const [isLoadingEventAnalysis, setIsLoadingEventAnalysis] = useState(false);
 
   // Load ban đầu
   useEffect(() => {
@@ -198,7 +206,7 @@ export default function App() {
     }
   };
 
-  // --- LOGIC TAB 2: XẢ NÃO ---
+  // --- LOGIC TAB 2: XẢ NÃO & AI CỨU TRỢ ---
   const handleNuclearWipe = async () => {
     if (!dumpTag) {
       showToast('Vui lòng chọn 1 chủ đề xả não!', 'error');
@@ -212,8 +220,10 @@ export default function App() {
     setIsWiping(true);
 
     const text = dumpText.trim();
+    const tag = dumpTag;
     const wordCount = text.split(/\s+/).filter(Boolean).length;
 
+    // Phân tích trạng thái tiêu cực
     const negativeWords = ['tức', 'giận', 'điên', 'ghét', 'bực', 'nản', 'áp lực', 'mệt', 'tệ', 'khóc', 'hận', 'chán'];
     let emotion = 'Mệt mỏi';
     let score = 0;
@@ -239,25 +249,61 @@ export default function App() {
     setLogs(updatedLogs);
     localStorage.setItem('logs', JSON.stringify(updatedLogs));
 
+    // Mở modal cứu trợ tức thời
+    setInstantAdviceData(null);
+    setShowInstantAdviceModal(true);
+    setInstantAdviceTone('serious');
+
     if (apiUrl) {
+      // Gửi metadata log lên sheets ẩn danh
+      fetch(apiUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newLog)
+      }).catch(err => console.error(err));
+
+      // Gọi API lấy lời khuyên tức thời
       try {
-        await fetch(apiUrl, {
+        const res = await fetch(apiUrl, {
           method: 'POST',
-          mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newLog)
+          body: JSON.stringify({
+            action: "getInstantAdvice",
+            text: text,
+            tag: tag
+          })
         });
+        const data = await res.json();
+        if (data && !data.error) {
+          setInstantAdviceData(data);
+        } else {
+          showToast('Lỗi lấy AI cứu trợ!', 'error');
+          runInstantAdviceFallback(tag);
+        }
       } catch (err) {
         console.error(err);
+        showToast('Lỗi kết nối AI online!', 'error');
+        runInstantAdviceFallback(tag);
       }
+    } else {
+      setTimeout(() => {
+        runInstantAdviceFallback(tag);
+      }, 1200);
     }
 
     setTimeout(() => {
       setDumpText('');
       setDumpTag('');
       setIsWiping(false);
-      showToast('Nội dung đã bốc hơi hoàn toàn! Đã ghi nhận chỉ số.');
     }, 600);
+  };
+
+  const runInstantAdviceFallback = (tag) => {
+    setInstantAdviceData({
+      seriousAdvice: `Bạn vừa xả uất ức về chủ đề [${tag}]. Để giải phóng sự quá tải hệ thần kinh ngay lúc này, hãy Shock giác quan bằng cách rửa mặt nước đá lạnh, uống một ly nước mát ấm, hoặc ngửi một chút tinh dầu hương thảo để định thần lại ngay lập tức.`,
+      funnyAdvice: `Xả ra xong bớt bực mình chưa cưng? Gớm bực dọc chi cho mau già xấu xí má ơi, đi rửa mặt rồi ngủ một giấc hoặc làm cốc trà sữa giải sầu đi cho khoẻ xác!`
+    });
   };
 
   // --- LOGIC TAB 3: STATISTICS & AI ORACLE ---
@@ -343,7 +389,8 @@ export default function App() {
 
   const { pathD, points: chartPoints } = renderSvgChart();
 
-  const handleRequestAI = async () => {
+  // Gọi AI Oracle báo cáo tổng quan 7 ngày
+  const handleRequestAIOverview = async () => {
     setIsLoadingAdvice(true);
     setOracleAdvice(null);
 
@@ -361,6 +408,7 @@ export default function App() {
       }
     }
 
+    // Giả lập AI chạy local nếu offline hoặc API lỗi
     setTimeout(() => {
       const last7 = logs.slice(-7);
       let sumMood = 0;
@@ -379,44 +427,64 @@ export default function App() {
 
       const avgMood = count > 0 ? sumMood / count : 3;
 
-      let simulated = {};
-      if (xanaoCount >= 2) {
-        simulated = {
-          patternTitle: `Quá tải cảm xúc & Đang sập nguồn (Đã xả não ${xanaoCount} lần, phanh gấp ${localBrakes} lần)`,
-          patternDesc: "Lịch sử tuần qua cho thấy bạn liên tục rơi vào trạng thái bùng nổ uất ức. Hệ thần kinh của bạn đang phản kháng bằng cách kích hoạt cơ chế giả chết (sập nguồn/đóng băng) sau các sự kiện gây áp lực.",
-          seriousAdvice: "Phân tích tâm lý chỉ ra áp lực từ công việc hoặc bạn bè đang đè nặng. Bạn đã tự phanh " + localBrakes + " lần, chứng tỏ bạn có nỗ lực tự kiểm soát, nhưng gốc rễ là cơ thể đang kiệt quệ. Đừng cố gồng gánh thêm trách nhiệm.",
-          funnyAdvice: "Đồng chí ơi, tuần này 'xả rác cảm xúc' tận " + xanaoCount + " lần rồi, lại thêm " + localBrakes + " lần phanh gấp gồng mình mệt mỏi. Định làm siêu nhân gánh tạ à? Hệ thần kinh nó đình công rồi kìa, thôi xin lỗi bản thân rồi đi ngủ đi má, gồng chi cho mệt người!",
-          microAction: "Sập nguồn chủ động: Đóng toàn bộ máy tính, tắt thông báo điện thoại và dành 30 phút nằm yên nghỉ ngơi hoàn toàn, tuyệt đối không tự trách mình."
-        };
-      } else if (avgMood > 3.8) {
-        simulated = {
-          patternTitle: `Peak năng lượng cao & Dễ vạ miệng (Phanh gấp ${localBrakes} lần)`,
-          patternDesc: "Tâm trạng trung bình tuần đạt " + avgMood.toFixed(1) + "/5. Năng lượng hưng phấn ở mức rất cao. Khi gặp đám đông, sự phấn khích dễ cuốn bạn đi xa hơn ranh giới an toàn.",
-          seriousAdvice: "Trạng thái hưng phấn kéo dài dễ làm suy giảm khả năng tự soi chiếu (mau quên bài học). Bạn đã phanh " + localBrakes + " lần trước giờ G, đây là tín hiệu tốt. Hãy tiếp tục duy trì bộ lọc 3 giây để điều hòa giao tiếp.",
-          funnyAdvice: "Vibe đang lên chín tầng mây rồi đúng không? Coi chừng nói dai nói dài lại thành nói dại nha cưng. Đã tự phanh " + localBrakes + " lần rồi thì nhớ giữ cái phanh đó cho chặt. Gặp người ta bớt buôn dưa lê drama lại, nghe nhiều nói ít thôi cho nó sang!",
-          microAction: "Mỗi khi thấy bắt đầu nói nhanh và hăng hái, hãy uống một ngụm nước ấm và im lặng đúng 5 giây trước khi phản hồi người khác."
-        };
-      } else if (avgMood < 2.5) {
-        simulated = {
-          patternTitle: `Sụt giảm năng lượng & Dễ thất vọng (Phanh gấp ${localBrakes} lần)`,
-          patternDesc: "Mood tuần chạm đáy " + avgMood.toFixed(1) + "/5. Sự mệt mỏi thể chất đang bóp méo suy nghĩ của bạn, khiến bạn dễ hụt hẫng và suy diễn tiêu cực về hành động của bạn bè.",
-          seriousAdvice: "Khi cơ thể sụt pin, khao khát đồng điệu tuyệt đối sẽ tăng cao, dễ sinh kỳ vọng phi thực tế. Bạn trung lập là do tính cách họ, không phải họ ghét bỏ bạn. Hãy thực hành ranh giới cảm xúc rõ ràng.",
-          funnyAdvice: "Đang hết pin rã rời nên nhìn đời qua kính đen đúng không? Lại ngồi suy diễn bạn bè chả thương mình nữa rồi. Tỉnh táo lại đi má ơi! Người ta bận việc hoặc thẳng tính thôi, đừng có bắt người ta phải chiều chuộng cảm xúc của mình mãi thế!",
-          microAction: "Gắn nhãn (Disclaimer) ngay đầu câu khi tâm sự: 'Tớ kể để xả thôi, cứ đứng về phía tớ nhé, đừng phân tích đúng sai'."
-        };
-      } else {
-        simulated = {
-          patternTitle: `Cân bằng lý trí (Đã phanh ${localBrakes} lần, xả não ${xanaoCount} lần)`,
-          patternDesc: "Chu kỳ 7 ngày qua rất ổn định với mood trung bình " + avgMood.toFixed(1) + "/5. Bạn đã phối hợp nhịp nhàng giữa phanh gấp chủ động và xả áp cảm xúc kịp thời.",
-          seriousAdvice: "Duy trì khoảng xám im lặng tinh tế là chìa khóa. Việc chấp nhận sự im lặng ấm áp trong giao tiếp có sức hút hơn nhiều so với việc cố gồng mình nói chuyện.",
-          funnyAdvice: "Tuần này trộm vía ngoan ngoãn, không thấy vạ miệng mà cũng không sập nguồn. Đã tự phanh " + localBrakes + " lần rất uy tín. Cứ nhịp điệu này mà đi nha cưng, đừng có tự dưng nổi hứng kiếm chuyện làm sượng cuộc chơi!",
-          microAction: "Tiếp tục duy trì năng lượng vừa phải. Giao tiếp bình tĩnh, lắng nghe nhiều hơn để bảo toàn vibe chung."
-        };
-      }
+      const simulated = {
+        patternTitle: `Cân bằng lý trí (Phanh ${localBrakes} lần, xả ${xanaoCount} lần)`,
+        patternDesc: `Năng lượng trung bình đạt ${avgMood.toFixed(1)}/5. Trạng thái tâm lý tổng quát tuần qua ổn định. Bạn đang phối hợp tốt giữa phanh gấp trước cuộc gặp và xả áp kịp thời để duy trì sự cân bằng.`,
+        seriousAdvice: "Tiếp tục thực hành bộ lọc 3 giây trong giao tiếp. Hãy làm một người lắng nghe chân thành, gật đầu mỉm cười thay vì cố gắng điều khiển cuộc trò chuyện.",
+        microAction: "Duy trì uống 1 cốc nước ấm trước khi phát biểu ý kiến trong các bối cảnh nhạy cảm hôm nay."
+      };
 
       setOracleAdvice(simulated);
       setIsLoadingAdvice(false);
     }, 1200);
+  };
+
+  // Gọi AI Phân tích sự kiện chọn lọc
+  const handleRequestEventAnalysis = async () => {
+    if (!selectedEventId) {
+      showToast('Chưa chọn sự kiện để phân tích!', 'error');
+      return;
+    }
+    const log = logs.find(l => l.id === selectedEventId);
+    if (!log) return;
+
+    setIsLoadingEventAnalysis(true);
+    setEventAnalysisData(null);
+
+    if (apiUrl) {
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: "analyzeEvent",
+            log: log
+          })
+        });
+        const data = await res.json();
+        if (data && !data.error) {
+          setEventAnalysisData(data);
+          setIsLoadingEventAnalysis(false);
+          return;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Giả lập phân tích sự kiện cục bộ
+    setTimeout(() => {
+      const simulated = {
+        explanation: `Sự kiện check-in bối cảnh [${log.contextTag}] có bài học: "${log.lessonNote}". Cảm xúc Mood ${log.moodRating}/5 chỉ ra rằng phản ứng của bạn xuất phát từ sự kích hoạt đột ngột của Amygdala (cơ chế chiến-hoặc-biến) làm mất đi 3 giây lọc thông tin lý tính.`,
+        recommendation: "Kích hoạt bộ lọc 3 giây: Mỗi khi gặp tình huống tương tự, hãy im lặng, hít thở và uống 1 ngụm nước để hạ nhiệt hệ thần kinh giao cảm trước khi phản hồi."
+      };
+      setEventAnalysisData(simulated);
+      setIsLoadingEventAnalysis(false);
+    }, 1200);
+  };
+
+  const getFilterCheckinLogs = () => {
+    return logs.filter(l => l.contextTag !== 'Xả não' && l.contextTag !== 'Trước giờ G');
   };
 
   return (
@@ -442,7 +510,7 @@ export default function App() {
             {/* Nút Sắp Vào Trận */}
             <div className="bg-gradient-to-b from-rose-950/20 to-transparent p-5 rounded-2xl border border-rose-900/30 text-center space-y-4">
               <h2 className="text-xs font-semibold uppercase tracking-widest text-rose-400">Tiện ích "Trước Giờ G"</h2>
-              <p className="text-sm text-gray-400">Bấm nút phanh này để kích hoạt lại bộ nhớ, đối diện với bài học xương máu trước khi bắt đầu giao tiếp.</p>
+              <p class="text-sm text-gray-400">Bấm nút phanh này để kích hoạt lại bộ nhớ, đối diện với bài học xương máu trước khi bắt đầu giao tiếp.</p>
               <button 
                 onClick={handleTriggerBuffer}
                 className="w-full py-4 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 active:scale-95 text-white font-semibold rounded-xl shadow-lg shadow-rose-950/50 transition-all duration-200 flex items-center justify-center space-x-2"
@@ -668,7 +736,7 @@ export default function App() {
                 </div>
                 <div className="mt-2 flex items-baseline space-x-1">
                   <span className="text-2xl font-bold text-rose-500">{brakesCount}</span>
-                  <span className="text-[10px] text-gray-500">lần trước giờ G</span>
+                  <span className="text-[10px] text-gray-500 font-sans">lần trước giờ G</span>
                 </div>
               </div>
 
@@ -679,7 +747,7 @@ export default function App() {
                 </div>
                 <div className="mt-2 flex items-baseline space-x-1">
                   <span className="text-2xl font-bold text-brandred">{dumpsCount}</span>
-                  <span className="text-[10px] text-gray-500">lần xả não</span>
+                  <span className="text-[10px] text-gray-500 font-sans">lần xả não</span>
                 </div>
               </div>
             </div>
@@ -710,96 +778,155 @@ export default function App() {
               </div>
             </div>
 
-            {/* Nút Gọi AI Oracle */}
-            <div className="space-y-4">
+            {/* Sub-tabs cho AI Oracle */}
+            <div className="flex bg-darkcard border border-darkborder p-1 rounded-xl">
               <button 
-                onClick={handleRequestAI}
-                disabled={isLoadingAdvice}
-                className="w-full py-4 bg-gradient-to-r from-brandviolet to-indigo-700 hover:from-purple-600 hover:to-indigo-800 text-white font-semibold rounded-xl shadow-lg shadow-purple-950/20 active:scale-95 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                onClick={() => setOracleSubTab('overview')} 
+                className={`flex-1 py-2.5 text-xs font-semibold rounded-lg transition-all ${
+                  oracleSubTab === 'overview' 
+                    ? 'bg-darkborder text-brandviolet font-bold' 
+                    : 'text-gray-400'
+                }`}
               >
-                <Sparkles className="w-5 h-5 fill-current text-purple-200" />
-                <span>Nhận Lời Khuyên Từ Bản Thân</span>
+                📊 Tổng Quan 7 Ngày
               </button>
+              <button 
+                onClick={() => setOracleSubTab('event')} 
+                className={`flex-1 py-2.5 text-xs font-semibold rounded-lg transition-all ${
+                  oracleSubTab === 'event' 
+                    ? 'bg-darkborder text-brandviolet font-bold' 
+                    : 'text-gray-400'
+                }`}
+              >
+                🎯 Phân Tích Sự Kiện
+              </button>
+            </div>
 
-              {/* Khung Kết Quả Oracle */}
-              {(isLoadingAdvice || oracleAdvice) && (
-                <div className="bg-darkcard border border-darkborder rounded-2xl p-5 space-y-4">
-                  <div className="flex justify-between items-center border-b border-darkborder pb-3">
-                    <div className="flex items-center space-x-3">
+            {/* SUB-TAB 1: OVERVIEW */}
+            {oracleSubTab === 'overview' && (
+              <div className="space-y-4">
+                <button 
+                  onClick={handleRequestAIOverview}
+                  disabled={isLoadingAdvice}
+                  className="w-full py-4 bg-gradient-to-r from-brandviolet to-indigo-700 hover:from-purple-600 hover:to-indigo-800 text-white font-semibold rounded-xl shadow-lg shadow-purple-950/20 active:scale-95 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                >
+                  <Sparkles className="w-5 h-5 fill-current text-purple-200" />
+                  <span>Nhận Lời Khuyên Tổng Quan</span>
+                </button>
+
+                {/* Khung Kết Quả Oracle Overview */}
+                {(isLoadingAdvice || oracleAdvice) && (
+                  <div className="bg-darkcard border border-darkborder rounded-2xl p-5 space-y-4">
+                    <div className="flex items-center space-x-3 border-b border-darkborder pb-3">
                       <div className="w-8 h-8 rounded-full bg-brandviolet/20 flex items-center justify-center border border-brandviolet/40">
                         <Bot className="w-4.5 h-4.5 text-brandviolet" />
                       </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-gray-200">AI Oracle (Bộ nhớ ngoài)</h4>
-                        <p className="text-[10px] text-gray-500 font-sans">Đã đối chiếu Master Advice & Logs</p>
+                        <h4 className="text-sm font-semibold text-gray-200">AI Oracle (Đúc kết 7 Ngày)</h4>
+                        <p className="text-[10px] text-gray-500 font-sans">Đối chiếu Master Advice & Logs</p>
                       </div>
                     </div>
-                    
-                    {oracleAdvice && (
-                      <div className="flex bg-darkbg border border-darkborder p-0.5 rounded-lg text-[10px] font-medium">
-                        <button 
-                          onClick={() => setOracleTone('serious')} 
-                          className={`py-1 px-2.5 rounded-md transition-all ${
-                            oracleTone === 'serious' 
-                              ? 'text-brandviolet bg-darkborder font-semibold' 
-                              : 'text-gray-400'
-                          }`}
-                        >
-                          👔 Nghiêm túc
-                        </button>
-                        <button 
-                          onClick={() => setOracleTone('funny')} 
-                          className={`py-1 px-2.5 rounded-md transition-all ${
-                            oracleTone === 'funny' 
-                              ? 'text-brandviolet bg-darkborder font-semibold' 
-                              : 'text-gray-400'
-                          }`}
-                        >
-                          🎭 Cợt nhả
-                        </button>
+
+                    {isLoadingAdvice ? (
+                      <div className="flex items-center space-x-2 text-brandviolet animate-pulse justify-center py-4">
+                        <Loader className="w-5 h-5 animate-spin" />
+                        <span className="text-sm font-sans">AI đang phân tích xu hướng cảm xúc...</span>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-300 space-y-3 leading-relaxed font-light font-sans">
+                        <p className="font-medium text-rose-400">
+                          ⚠️ [Chu kỳ tâm lý 7 ngày qua]:
+                        </p>
+                        <p className="text-xs leading-relaxed text-gray-200 font-bold">{oracleAdvice.patternTitle}</p>
+                        <p className="text-xs leading-relaxed mt-1 text-gray-300">{oracleAdvice.patternDesc}</p>
+                        
+                        <p className="font-medium text-amber-400 mt-3">
+                          👔 [Lời khuyên dài hạn (Master Advice)]:
+                        </p>
+                        <p className="text-xs leading-relaxed text-gray-300">{oracleAdvice.seriousAdvice}</p>
+
+                        <p className="font-medium text-emerald-400 mt-3">
+                          🎯 [Hành động nhỏ hôm nay]:
+                        </p>
+                        <div className="text-xs bg-emerald-950/20 p-2.5 rounded-lg border border-emerald-900/30 font-semibold text-emerald-300">
+                          {oracleAdvice.microAction}
+                        </div>
                       </div>
                     )}
                   </div>
+                )}
+              </div>
+            )}
 
-                  {isLoadingAdvice ? (
-                    <div className="flex items-center space-x-2 text-brandviolet animate-pulse justify-center py-4">
-                      <Loader className="w-5 h-5 animate-spin" />
-                      <span className="text-sm">AI đang phân tích chuỗi sự kiện và đúc kết lời khuyên...</span>
-                    </div>
-                  ) : (
-                    <div className="text-sm text-gray-300 space-y-3 leading-relaxed font-light">
-                      <p className="font-medium text-rose-400 flex items-center">
-                        ⚠️ [Chu kỳ tâm lý 7 ngày qua]: {oracleAdvice.patternTitle}
-                      </p>
-                      <p className="text-xs leading-relaxed">{oracleAdvice.patternDesc}</p>
-                      
-                      {oracleTone === 'serious' ? (
-                        <>
-                          <p className="font-medium text-amber-400 mt-3 flex items-center space-x-1">
-                            <span>👔 [Lời khuyên nghiêm túc]:</span>
-                          </p>
-                          <p className="text-xs leading-relaxed">{oracleAdvice.seriousAdvice}</p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="font-medium text-purple-400 mt-3 flex items-center space-x-1">
-                            <span>🎭 [Lời khuyên cợt nhả từ chí cốt]:</span>
-                          </p>
-                          <p className="text-xs italic text-purple-200 leading-relaxed">"{oracleAdvice.funnyAdvice}"</p>
-                        </>
-                      )}
+            {/* SUB-TAB 2: EVENT ANALYSIS */}
+            {oracleSubTab === 'event' && (
+              <div className="space-y-4">
+                <div className="bg-darkcard p-5 rounded-2xl border border-darkborder space-y-4">
+                  <label className="text-xs text-gray-400 block font-light">Chọn sự kiện giao tiếp/check-in của tuần qua:</label>
+                  <select 
+                    value={selectedEventId}
+                    onChange={(e) => setSelectedEventId(e.target.value)}
+                    className="w-full py-3 px-4 bg-darkbg border border-darkborder rounded-xl text-xs focus:outline-none focus:border-brandviolet text-gray-200 font-sans"
+                  >
+                    <option value="">-- Chọn sự kiện trong danh sách --</option>
+                    {getFilterCheckinLogs().map(log => {
+                      const dateStr = log.createdAt.substring(5, 16);
+                      const snippet = log.lessonNote.length > 45 ? log.lessonNote.substring(0, 45) + '...' : log.lessonNote;
+                      return (
+                        <option key={log.id} value={log.id}>
+                          [{dateStr}] [{log.contextTag}] Mood {log.moodRating}: {snippet}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <button 
+                    onClick={handleRequestEventAnalysis}
+                    disabled={isLoadingEventAnalysis || !selectedEventId}
+                    className="w-full py-3.5 bg-gradient-to-r from-brandviolet to-indigo-700 hover:from-purple-600 hover:to-indigo-800 text-white font-semibold rounded-xl text-xs transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                  >
+                    <Brain className="w-4 h-4" />
+                    <span>AI PHÂN TÍCH SỰ KIỆN NÀY</span>
+                  </button>
+                </div>
 
-                      <p className="font-medium text-emerald-400 mt-3 flex items-center space-x-1">
-                        <span>🎯 [Hành động khuyến nghị hôm nay]:</span>
-                      </p>
-                      <div className="text-xs bg-emerald-950/20 p-2.5 rounded-lg border border-emerald-900/30 font-semibold text-emerald-300">
-                        {oracleAdvice.microAction}
+                {/* Khung kết quả Event Analysis */}
+                {(isLoadingEventAnalysis || eventAnalysisData) && (
+                  <div className="bg-darkcard border border-darkborder rounded-2xl p-5 space-y-4">
+                    <div className="flex items-center space-x-3 border-b border-darkborder pb-3">
+                      <div className="w-8 h-8 rounded-full bg-brandviolet/20 flex items-center justify-center border border-brandviolet/40">
+                        <Bot className="w-4.5 h-4.5 text-brandviolet" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-200">AI Oracle (Giải mã sự kiện)</h4>
+                        <p className="text-[10px] text-gray-500 font-sans font-light">Phân tích cơ chế sinh học & tâm lý học</p>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
+
+                    {isLoadingEventAnalysis ? (
+                      <div className="flex items-center space-x-2 text-brandviolet animate-pulse justify-center py-4">
+                        <Loader className="w-5 h-5 animate-spin" />
+                        <span className="text-sm">AI đang giải mã phản ứng tâm lý...</span>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-300 space-y-3 leading-relaxed font-light font-sans">
+                        <p className="font-medium text-rose-400">
+                          🧠 [Giải mã cơ chế tâm lý]:
+                        </p>
+                        <p className="text-xs leading-relaxed text-gray-300">{eventAnalysisData.explanation}</p>
+                        
+                        <p className="font-medium text-emerald-400 mt-3">
+                          🎯 [Khuyến nghị hướng giải quyết]:
+                        </p>
+                        <div className="text-xs bg-emerald-950/20 p-2.5 rounded-lg border border-emerald-900/30 font-semibold text-emerald-300">
+                          {eventAnalysisData.recommendation}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
       </main>
@@ -860,8 +987,6 @@ export default function App() {
                 * Nhập URL Apps Script Web App của bạn để đồng bộ dữ liệu trực tiếp lên Google Sheets. Tạm thời app sẽ lưu cục bộ trong trình duyệt (Local Storage) để chạy thử nghiệm.
               </div>
             </div>
-
-
             <button 
               onClick={() => {
                 localStorage.setItem('api_url', apiUrl);
@@ -950,6 +1075,74 @@ export default function App() {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ================== POPUP MODAL: AI INSTANT ADVICE (TAB 2) ================== */}
+      {showInstantAdviceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/85 backdrop-blur-md">
+          <div className="w-full max-w-sm bg-darkcard border border-rose-900/30 rounded-2xl p-6 space-y-4 flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center border-b border-darkborder pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-2.5 h-2.5 bg-brandred rounded-full animate-ping"></div>
+                <h3 className="font-bold text-gray-200 text-sm">AI Cứu Trợ Tức Thời</h3>
+              </div>
+              <button onClick={() => setShowInstantAdviceModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex bg-darkbg border border-darkborder p-0.5 rounded-lg text-xs font-medium self-center">
+              <button 
+                onClick={() => setInstantAdviceTone('serious')} 
+                className={`py-1.5 px-4 rounded-md transition-all ${
+                  instantAdviceTone === 'serious' 
+                    ? 'text-brandred bg-darkborder font-semibold' 
+                    : 'text-gray-400'
+                }`}
+              >
+                👔 Nghiêm túc
+              </button>
+              <button 
+                onClick={() => setInstantAdviceTone('funny')} 
+                className={`py-1.5 px-4 rounded-md transition-all ${
+                  instantAdviceTone === 'funny' 
+                    ? 'text-brandred bg-darkborder font-semibold' 
+                    : 'text-gray-400'
+                }`}
+              >
+                🎭 Cợt nhả
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto no-scrollbar py-2 text-sm text-gray-300 space-y-3 leading-relaxed font-light font-sans">
+              {!instantAdviceData ? (
+                <div className="flex items-center space-x-2 text-brandred animate-pulse justify-center py-4">
+                  <Loader className="w-5 h-5 animate-spin" />
+                  <span className="text-sm">AI cứu trợ đang phân tích uất ức tức thời...</span>
+                </div>
+              ) : (
+                instantAdviceTone === 'serious' ? (
+                  <>
+                    <p className="font-semibold text-rose-400">👔 [Lời khuyên nghiêm túc]:</p>
+                    <p className="text-xs leading-relaxed text-gray-200">{instantAdviceData.seriousAdvice}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-semibold text-purple-400">🎭 [Lời khuyên cợt nhả từ bạn thân]:</p>
+                    <p className="text-xs italic text-purple-200 leading-relaxed">"{instantAdviceData.funnyAdvice}"</p>
+                  </>
+                )
+              )}
+            </div>
+
+            <button 
+              onClick={() => setShowInstantAdviceModal(false)}
+              className="w-full py-3 bg-brandred hover:bg-rose-600 text-white font-medium rounded-xl text-sm transition-all duration-200"
+            >
+              Tôi đã thông não!
+            </button>
           </div>
         </div>
       )}

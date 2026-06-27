@@ -46,11 +46,23 @@ function doGet(e) {
 }
 
 /**
- * POST Request: Lưu bài học mới (Check-in, Phanh Gấp hoặc Xả Não)
+ * POST Request: Lưu bài học mới (Check-in, Phanh Gấp hoặc Xả Não) hoặc gửi Yêu cầu AI
  */
 function doPost(e) {
   try {
     const postData = JSON.parse(e.postData.contents);
+    
+    // 1. Endpoint: AI Cứu Trợ Tức Thời ở Tab 2 (Không lưu văn bản uất ức vào Sheet)
+    if (postData.action === "getInstantAdvice") {
+      return handleGetInstantAdvice(postData.text, postData.tag);
+    }
+
+    // 2. Endpoint: AI Phân tích Sự Kiện Chọn Lọc ở Tab 3
+    if (postData.action === "analyzeEvent") {
+      return handleAnalyzeEvent(postData.log);
+    }
+    
+    // 3. Ghi log check-in bình thường vào sheet Daily_Logs
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET_DAILY_LOGS);
     
@@ -107,13 +119,121 @@ function handleGetLogs() {
 }
 
 /**
- * Trình gọi AI Oracle (Gemini 1.5 Flash)
+ * Endpoint AI: Cứu trợ tức thời khi xả uất ức ở Tab 2
+ */
+function handleGetInstantAdvice(text, tag) {
+  try {
+    const apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
+    if (!apiKey) {
+      return getCorsResponse({ error: "Chưa cấu hình GEMINI_API_KEY trong Project Settings!" });
+    }
+    
+    const systemPrompt = 
+      "Người dùng vừa viết một văn bản xả giận/uất ức (Brain Dump) trong bối cảnh: '" + tag + "'.\n" +
+      "Nhiệm vụ của bạn: Hãy phân tích nhanh văn bản xả giận này và trả về phản hồi tâm lý cứu trợ tức thời dưới dạng cấu trúc JSON chứa đúng các key sau:\n" +
+      "- `seriousAdvice`: Lời khuyên nghiêm túc, thấu cảm, khoa học tâm lý và có giá trị thật giúp họ giải tỏa hoặc kéo não về thực tại ngay lập tức (ví dụ: rửa mặt nước đá, ngửi tinh dầu, hít thở sâu, uống nước lạnh...). Lời khuyên này nên hướng tới việc giải quyết hoặc làm nguội cảm xúc tức thời dựa vào nội dung uất ức họ gõ.\n" +
+      "- `funnyAdvice`: Lời khuyên cợt nhả, hài hước, mang tính chất châm biếm nhẹ nhàng, troll vui vẻ từ một người bạn thân chí cốt để làm họ bật cười, giảm bớt sự căng thẳng của vấn đề.\n\n" +
+      "Trả về kết quả định dạng JSON thuần, không bọc trong ```json và ```.";
+      
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+    const payload = {
+      contents: [{
+        parts: [{
+          text: systemPrompt + "\n\nNội dung xả uất ức của người dùng: \"" + text + "\""
+        }]
+      }]
+    };
+    
+    const options = {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+    
+    const response = UrlFetchApp.fetch(url, options);
+    const resText = response.getContentText();
+    const resJson = JSON.parse(resText);
+    
+    if (resJson.candidates && resJson.candidates[0].content.parts[0].text) {
+      let rawText = resJson.candidates[0].content.parts[0].text.trim();
+      if (rawText.startsWith("```json")) rawText = rawText.substring(7);
+      if (rawText.endsWith("```")) rawText = rawText.substring(0, rawText.length - 3);
+      return getCorsResponse(JSON.parse(rawText.trim()));
+    } else {
+      return getCorsResponse({ error: "Lỗi từ Gemini API: " + JSON.stringify(resJson) });
+    }
+  } catch (err) {
+    return getCorsResponse({ error: "Lỗi AI cứu trợ tức thời: " + err.toString() });
+  }
+}
+
+/**
+ * Endpoint AI: Phân tích một sự kiện giao tiếp chọn lọc ở Tab 3
+ */
+function handleAnalyzeEvent(log) {
+  try {
+    const apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
+    if (!apiKey) {
+      return getCorsResponse({ error: "Chưa cấu hình GEMINI_API_KEY trong Project Settings!" });
+    }
+    
+    const systemPrompt = 
+      "Người dùng muốn bạn phân tích một sự kiện giao tiếp/check-in cụ thể khiến họ bị tác động cảm xúc tiêu cực hoặc quá phấn khích.\n" +
+      "Thông tin sự kiện:\n" +
+      "- Bối cảnh: " + log.contextTag + "\n" +
+      "- Cảm xúc: Mood " + log.moodRating + "/5\n" +
+      "- Bài học xương máu tự rút ra: \"" + log.lessonNote + "\"\n" +
+      "- Chi tiết bối cảnh câu chuyện: \"" + (log.storyDetail || "Không có chi tiết") + "\"\n\n" +
+      "Nhiệm vụ của bạn:\n" +
+      "1. Phân tích nguyên nhân tâm lý/khoa học não bộ đứng sau phản ứng cảm xúc của họ tại sự kiện này (ví dụ: Amygdala Hijack, phản ứng Freeze, cơ chế tự vệ, tư duy nhị nguyên, kỳ vọng phóng chiếu...).\n" +
+      "2. Đưa ra phân tích sâu sắc và các hướng giải quyết, hành động cụ thể để khắc phục hoặc tránh lặp lại sai lầm trong tương lai.\n\n" +
+      "Hãy viết phản hồi một cách thấu cảm, sâu sắc và thực tế, phân tích trực tiếp vào vấn đề của họ. Kết quả trả về dưới dạng JSON chứa đúng các key:\n" +
+      "- `explanation`: Giải thích nguyên nhân tâm lý/khoa học não bộ đúc kết ngắn gọn, khoa học.\n" +
+      "- `recommendation`: Khuyến nghị hành động cụ thể để giải quyết hoặc ngăn ngừa tái phát.\n\n" +
+      "Trả về kết quả định dạng JSON thuần, không bọc trong ```json và ```.";
+      
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+    const payload = {
+      contents: [{
+        parts: [{
+          text: systemPrompt
+        }]
+      }]
+    };
+    
+    const options = {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+    
+    const response = UrlFetchApp.fetch(url, options);
+    const resText = response.getContentText();
+    const resJson = JSON.parse(resText);
+    
+    if (resJson.candidates && resJson.candidates[0].content.parts[0].text) {
+      let rawText = resJson.candidates[0].content.parts[0].text.trim();
+      if (rawText.startsWith("```json")) rawText = rawText.substring(7);
+      if (rawText.endsWith("```")) rawText = rawText.substring(0, rawText.length - 3);
+      return getCorsResponse(JSON.parse(rawText.trim()));
+    } else {
+      return getCorsResponse({ error: "Lỗi từ Gemini API: " + JSON.stringify(resJson) });
+    }
+  } catch (err) {
+    return getCorsResponse({ error: "Lỗi AI phân tích sự kiện: " + err.toString() });
+  }
+}
+
+/**
+ * Trình gọi AI Oracle (Gemini 1.5 Flash) - Báo cáo Tổng Quan 7 Ngày
  */
 function handleGetAdvice() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
-    // 1. Đọc dữ liệu Daily_Logs (7 ngày gần nhất)
+    // 1. Đọc dữ liệu Daily_Logs
     const logsSheet = ss.getSheetByName(SHEET_DAILY_LOGS);
     let logsData = [];
     if (logsSheet) {
@@ -126,8 +246,7 @@ function handleGetAdvice() {
         headers.forEach((h, idx) => { log[h] = row[idx]; });
         allLogs.push(log);
       }
-      // Lấy 7 bản ghi cuối
-      logsData = allLogs.slice(-15); // Lấy nhiều hơn một chút để lọc ra đủ 7 ngày checkin
+      logsData = allLogs.slice(-15); // Lấy 15 bản ghi gần nhất để phân tích
     }
     
     // 2. Đọc dữ liệu Master_Advice
@@ -152,20 +271,19 @@ function handleGetAdvice() {
       });
     }
     
-    // 4. Tạo Prompt gửi lên Gemini
+    // 4. Tạo Prompt gửi lên Gemini (Báo cáo tổng quan 7 ngày)
     const systemPrompt = 
       "Sử dụng cấu trúc dữ liệu JSON đính kèm từ hai trang tính Google Sheets của người dùng:\n" +
       "1. `Daily_Logs`: Chứa dữ liệu trạng thái tinh thần thực tế 7 ngày qua của người dùng.\n" +
       "2. `Master_Advice`: Bộ quy tắc giải pháp cốt lõi về tâm lý đã được đúc kết cho người dùng.\n\n" +
-      "Nhiệm vụ của bạn: Đóng vai trò là một 'Bộ nhớ ngoài khách quan', đối chiếu hành vi thực tế tuần qua của người dùng với Bộ quy tắc giải pháp để đưa ra một phản hồi DUY NHẤT dưới dạng cấu trúc JSON sạch chứa đúng các key sau:\n" +
+      "Nhiệm vụ của bạn: Hãy phân tích xu hướng tổng quan 7 ngày qua, số lần phanh gấp và số lần xả uất ức. Đưa ra báo cáo đúc kết tổng quan hành vi và bài học. Trả về cấu trúc JSON chứa đúng các key sau:\n" +
       "- `patternTitle`: Tiêu đề tóm tắt chu kỳ cảm xúc tuần qua (ví dụ: 'Quá tải cảm xúc & Đang sập nguồn (Đã xả não 3 lần, tự phanh 2 lần trước giờ G)').\n" +
-      "- `patternDesc`: Phân tích chu kỳ tâm lý 7 ngày qua, giải thích nguyên nhân dựa vào các sự kiện check-in và thống kê xả não/phanh gấp của họ.\n" +
-      "- `seriousAdvice`: Lời khuyên nghiêm túc, sâu sắc từ Master Advice, giải thích nguyên nhân và cách điều hòa theo tâm lý học.\n" +
-      "- `funnyAdvice`: Lời khuyên cợt nhả, hài hước, châm biếm nhẹ nhàng như một người bạn thân chí cốt troll để 'tát tỉnh' người dùng.\n" +
-      "- `microAction`: Một hành động cụ thể, dễ thực hiện ngay lập tức (Micro-action) để điều hòa cảm xúc của ngày hôm nay.\n\n" +
+      "- `patternDesc`: Phân tích chi tiết chu kỳ tâm lý 7 ngày qua, lý giải các diễn biến dựa trên số liệu ghi nhận.\n" +
+      "- `seriousAdvice`: Đúc kết lời khuyên hành vi dài hạn dựa trên Master Advice của họ.\n" +
+      "- `microAction`: Một hành động nhỏ cụ thể khuyến nghị họ thực hiện ngay hôm nay.\n\n" +
       "Trả về kết quả định dạng JSON thuần, không bọc trong ```json và ```.";
 
-    const userPrompt = `Dữ liệu lịch sử 7 ngày: ${JSON.stringify(logsData)}\n\nBộ quy tắc Master Advice: ${JSON.stringify(adviceData)}`;
+    const userPrompt = `Dữ liệu lịch sử: ${JSON.stringify(logsData)}\n\nBộ quy tắc Master Advice: ${JSON.stringify(adviceData)}`;
     
     // Gọi API Gemini
     const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
@@ -191,21 +309,15 @@ function handleGetAdvice() {
     
     if (resJson.candidates && resJson.candidates[0].content.parts[0].text) {
       let rawText = resJson.candidates[0].content.parts[0].text.trim();
-      // Làm sạch nếu Gemini vẫn trả về markdown block
-      if (rawText.startsWith("```json")) {
-        rawText = rawText.substring(7);
-      }
-      if (rawText.endsWith("```")) {
-        rawText = rawText.substring(0, rawText.length - 3);
-      }
+      if (rawText.startsWith("```json")) rawText = rawText.substring(7);
+      if (rawText.endsWith("```")) rawText = rawText.substring(0, rawText.length - 3);
       
       const parsedAdvice = JSON.parse(rawText.trim());
       return getCorsResponse(parsedAdvice);
     } else {
       return getCorsResponse({ error: "Lỗi từ Gemini API: " + JSON.stringify(resJson) });
     }
-    
   } catch (err) {
-    return getCorsResponse({ error: "Lỗi gọi AI Oracle: " + err.toString() });
+    return getCorsResponse({ error: "Lỗi gọi AI Oracle tổng quan: " + err.toString() });
   }
 }
