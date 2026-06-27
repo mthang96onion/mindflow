@@ -41,28 +41,35 @@ function doGet(e) {
   if (action === "getAdvice") {
     return handleGetAdvice();
   }
+
+  // Nhận yêu cầu cứu trợ tức thời qua GET để tránh lỗi CORS
+  if (action === "getInstantAdvice") {
+    const text = e.parameter.text;
+    const tag = e.parameter.tag;
+    return handleGetInstantAdvice(text, tag);
+  }
+
+  // Nhận yêu cầu phân tích sự kiện cụ thể qua GET để tránh lỗi CORS
+  if (action === "analyzeEvent") {
+    try {
+      const log = JSON.parse(decodeURIComponent(e.parameter.log));
+      return handleAnalyzeEvent(log);
+    } catch(err) {
+      return getCorsResponse({ error: "Lỗi giải mã tham số log: " + err.toString() });
+    }
+  }
   
   return getCorsResponse({ error: "Action không hợp lệ. Vui lòng sử dụng action=getLogs hoặc action=getAdvice" });
 }
 
 /**
- * POST Request: Lưu bài học mới (Check-in, Phanh Gấp hoặc Xả Não) hoặc gửi Yêu cầu AI
+ * POST Request: Lưu bài học mới (Check-in, Phanh Gấp hoặc Xả Não)
  */
 function doPost(e) {
   try {
     const postData = JSON.parse(e.postData.contents);
     
-    // 1. Endpoint: AI Cứu Trợ Tức Thời ở Tab 2 (Không lưu văn bản uất ức vào Sheet)
-    if (postData.action === "getInstantAdvice") {
-      return handleGetInstantAdvice(postData.text, postData.tag);
-    }
-
-    // 2. Endpoint: AI Phân tích Sự Kiện Chọn Lọc ở Tab 3
-    if (postData.action === "analyzeEvent") {
-      return handleAnalyzeEvent(postData.log);
-    }
-    
-    // 3. Ghi log check-in bình thường vào sheet Daily_Logs
+    // Ghi log check-in bình thường vào sheet Daily_Logs (vẫn dùng POST no-cors tốt vì không cần đọc phản hồi)
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET_DAILY_LOGS);
     

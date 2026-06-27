@@ -265,14 +265,7 @@ export default function App() {
 
       // Gọi API lấy lời khuyên tức thời
       try {
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          body: JSON.stringify({
-            action: "getInstantAdvice",
-            text: text,
-            tag: tag
-          })
-        });
+        const res = await fetch(`${apiUrl}?action=getInstantAdvice&text=${encodeURIComponent(text)}&tag=${encodeURIComponent(tag)}`);
         const data = await res.json();
         if (data && !data.error) {
           setInstantAdviceData(data);
@@ -452,13 +445,7 @@ export default function App() {
 
     if (apiUrl) {
       try {
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          body: JSON.stringify({
-            action: "analyzeEvent",
-            log: log
-          })
-        });
+        const res = await fetch(`${apiUrl}?action=analyzeEvent&log=${encodeURIComponent(JSON.stringify(log))}`);
         const data = await res.json();
         if (data && !data.error) {
           setEventAnalysisData(data);

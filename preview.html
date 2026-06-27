@@ -918,15 +918,10 @@
           body: JSON.stringify(payload)
         });
 
-        // Gửi văn bản lấy lời khuyên tức thời (không lưu văn bản này)
-        fetch(apiUrl, {
-          method: 'POST',
-          body: JSON.stringify({
-            action: "getInstantAdvice",
-            text: text,
-            tag: selectedDumpTag
-          })
-        })
+        // Gọi API lấy lời khuyên tức thời dùng GET để tránh lỗi CORS
+        const textParam = encodeURIComponent(text);
+        const tagParam = encodeURIComponent(selectedDumpTag);
+        fetch(`${apiUrl}?action=getInstantAdvice&text=${textParam}&tag=${tagParam}`)
         .then(res => res.json())
         .then(data => {
           if (data && !data.error) {
@@ -1240,13 +1235,8 @@
       lucide.createIcons();
       
       if (apiUrl) {
-        fetch(apiUrl, {
-          method: 'POST',
-          body: JSON.stringify({
-            action: "analyzeEvent",
-            log: log
-          })
-        })
+        const logStr = encodeURIComponent(JSON.stringify(log));
+        fetch(`${apiUrl}?action=analyzeEvent&log=${logStr}`)
         .then(res => res.json())
         .then(data => {
           if (data && !data.error) {
