@@ -142,7 +142,7 @@ function handleGetInstantAdvice(text, tag) {
       "- `funnyAdvice`: Lời khuyên cợt nhả, hài hước, mang tính chất châm biếm nhẹ nhàng, troll vui vẻ từ một người bạn thân chí cốt để làm họ bật cười, giảm bớt sự căng thẳng của vấn đề.\n\n" +
       "Trả về kết quả định dạng JSON thuần, không bọc trong ```json và ```.";
       
-    const url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+    const url = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=" + apiKey;
     const payload = {
       contents: [{
         parts: [{
@@ -200,7 +200,7 @@ function handleAnalyzeEvent(log) {
       "- `recommendation`: Khuyến nghị hành động cụ thể để giải quyết hoặc ngăn ngừa tái phát.\n\n" +
       "Trả về kết quả định dạng JSON thuần, không bọc trong ```json và ```.";
       
-    const url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+    const url = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=" + apiKey;
     const payload = {
       contents: [{
         parts: [{
@@ -293,7 +293,7 @@ function handleGetAdvice() {
     const userPrompt = `Dữ liệu lịch sử: ${JSON.stringify(logsData)}\n\nBộ quy tắc Master Advice: ${JSON.stringify(adviceData)}`;
     
     // Gọi API Gemini
-    const url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+    const url = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=" + apiKey;
     
     const payload = {
       contents: [{
