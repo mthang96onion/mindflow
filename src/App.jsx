@@ -1,0 +1,971 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Settings, Zap, BookOpen, Check, ShieldAlert, ChevronRight, 
+  Flame, TrendingUp, Sparkles, Bot, Loader, Info, X, AlertTriangle 
+} from 'lucide-react';
+
+// Dữ liệu mẫu ban đầu nếu localStorage chưa có
+const defaultLogs = [
+  { id: "1", createdAt: "2026-06-21 15:30:22", moodRating: 4, contextTag: "Bạn bè", lessonNote: "Lần trước gặp A nói năng vừa phải, năng lượng thoải mái.", storyDetail: "Hôm nay đi cà phê nói chuyện thoải mái với A, không bị cướp lời." },
+  { id: "2", createdAt: "2026-06-22 20:00:15", moodRating: 5, contextTag: "Đám đông", lessonNote: "Lên đỉnh phấn khích ở tiệc sinh nhật B, nói nhiều quá nên sau đó bị sượng.", storyDetail: "Ở bữa tiệc vui quá làm mình phấn khích kể trọn drama nhà B làm mọi người im lặng." },
+  { id: "3", createdAt: "2026-06-24 10:15:00", moodRating: 2, contextTag: "Công việc", lessonNote: "Bị sếp phê bình nhỏ nên sập nguồn đóng băng mất cả buổi chiều.", storyDetail: "Sếp nhắc nhẹ về báo cáo, mình bị Amygdala Hijack tự trách móc và không làm được gì tiếp." },
+  { id: "4", createdAt: "2026-06-25 18:30:00", moodRating: 3, contextTag: "Công việc", lessonNote: "Họp nhóm bình tĩnh, chỉ phát biểu ý kiến khi được hỏi.", storyDetail: "Buỏi họp diễn ra tốt đẹp, mình lắng nghe là chủ yếu." },
+  { id: "5", createdAt: "2026-06-26 21:00:00", moodRating: 1, contextTag: "Xả não", lessonNote: "Xả não: [Công việc] - Độ dài 95 từ", storyDetail: "Đúc kết cảm xúc: [Kiệt sức]" },
+  { id: "6", createdAt: "2026-06-26 14:00:00", moodRating: 3, contextTag: "Trước giờ G", lessonNote: "Cam kết phanh khẩn cấp trước khi gặp mặt", storyDetail: "Cam kết thành công" }
+];
+
+export default function App() {
+  // Tab & API State
+  const [activeTab, setActiveTab] = useState('buffer');
+  const [logs, setLogs] = useState([]);
+  const [apiUrl, setApiUrl] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
+
+  // Tab 1 (Check-in Form) State
+  const [moodRating, setMoodRating] = useState(3);
+  const [selectedContext, setSelectedContext] = useState('');
+  const [lessonNote, setLessonNote] = useState('');
+  const [storyDetail, setStoryDetail] = useState('');
+  const [isStoryOpen, setIsStoryOpen] = useState(false);
+
+  // Tab 1 Popup Buffer State
+  const [showBufferPopup, setShowBufferPopup] = useState(false);
+  const [bufferLogs, setBufferLogs] = useState([]);
+  const [commitVal, setCommitVal] = useState(0);
+
+  // Tab 2 (Brain Dump) State
+  const [dumpTag, setDumpTag] = useState('');
+  const [dumpText, setDumpText] = useState('');
+  const [isWiping, setIsWiping] = useState(false);
+
+  // Tab 3 (AI Oracle) State
+  const [oracleTone, setOracleTone] = useState('serious');
+  const [oracleAdvice, setOracleAdvice] = useState(null);
+  const [isLoadingAdvice, setIsLoadingAdvice] = useState(false);
+
+  // Load ban đầu
+  useEffect(() => {
+    const savedUrl = localStorage.getItem('api_url') || '';
+    setApiUrl(savedUrl);
+
+    if (!localStorage.getItem('logs')) {
+      localStorage.setItem('logs', JSON.stringify(defaultLogs));
+      setLogs(defaultLogs);
+    } else {
+      const stored = JSON.parse(localStorage.getItem('logs')) || [];
+      setLogs(stored);
+    }
+  }, []);
+
+  // Fetch từ Google Sheet nếu có URL cấu hình
+  const syncFromSheets = async (url) => {
+    if (!url) return;
+    try {
+      const res = await fetch(`${url}?action=getLogs`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        localStorage.setItem('logs', JSON.stringify(data));
+        setLogs(data);
+        showToast('Đồng bộ dữ liệu Sheets thành công!');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Đồng bộ Sheets thất bại, sử dụng offline.', 'error');
+    }
+  };
+
+  useEffect(() => {
+    if (apiUrl) {
+      syncFromSheets(apiUrl);
+    }
+  }, [apiUrl]);
+
+  // Toast System
+  const showToast = (message, type = 'info') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 2500);
+  };
+
+  // --- LOGIC TAB 1: FORM CHECK-IN ---
+  const handleSaveLog = async () => {
+    if (!selectedContext) {
+      showToast('Vui lòng chọn bối cảnh!', 'error');
+      return;
+    }
+    if (!lessonNote.trim()) {
+      showToast('Vui lòng ghi lại bài học 1 dòng!', 'error');
+      return;
+    }
+
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const newLog = {
+      id: Date.now().toString(),
+      createdAt: timestamp,
+      moodRating: parseInt(moodRating),
+      contextTag: selectedContext,
+      lessonNote: lessonNote.trim(),
+      storyDetail: storyDetail.trim()
+    };
+
+    const updatedLogs = [...logs, newLog];
+    setLogs(updatedLogs);
+    localStorage.setItem('logs', JSON.stringify(updatedLogs));
+
+    // Reset Form
+    setLessonNote('');
+    setStoryDetail('');
+    setMoodRating(3);
+    setSelectedContext('');
+    if (isStoryOpen) setIsStoryOpen(false);
+
+    if (apiUrl) {
+      showToast('Đang gửi lên Sheets...');
+      try {
+        await fetch(apiUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newLog)
+        });
+        showToast('Đã lưu bài học lên Google Sheets!');
+      } catch (err) {
+        showToast('Đồng bộ lỗi, đã lưu tạm cục bộ!', 'error');
+      }
+    } else {
+      showToast('Đã lưu bài học cục bộ (Chưa cấu hình Sheets)');
+    }
+  };
+
+  const getMoodLabelText = (val) => {
+    const labels = {
+      1: "1/5 - Sập nguồn / Đóng băng ❄️",
+      2: "2/5 - Mệt mỏi / Đi xuống 😟",
+      3: "3/5 - Bình thường / Cân bằng 😐",
+      4: "4/5 - Vui vẻ / Hăng hái 😊",
+      5: "5/5 - Quá hưng phấn / High năng lượng 🔥"
+    };
+    return labels[val] || '';
+  };
+
+  // --- LOGIC TAB 1: POPUP PHANH GẤP ---
+  const handleTriggerBuffer = () => {
+    const checkinLogs = logs.filter(l => l.contextTag !== 'Xả não' && l.contextTag !== 'Trước giờ G');
+    if (checkinLogs.length === 0) {
+      setBufferLogs([]);
+    } else {
+      const shuffled = [...checkinLogs].sort(() => 0.5 - Math.random());
+      setBufferLogs(shuffled.slice(0, 3));
+    }
+    setCommitVal(0);
+    setShowBufferPopup(true);
+  };
+
+  const handleCommitSliderChange = async (val) => {
+    setCommitVal(val);
+    if (val >= 95) {
+      setShowBufferPopup(false);
+      showToast('Bản năng đã được kiểm soát! Hãy tự tin vào trận.');
+
+      const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      const newLog = {
+        id: Date.now().toString(),
+        createdAt: timestamp,
+        moodRating: 3,
+        contextTag: 'Trước giờ G',
+        lessonNote: 'Đã tự phanh và cam kết kiểm soát trước cuộc gặp',
+        storyDetail: 'Cam kết thành công'
+      };
+
+      const updatedLogs = [...logs, newLog];
+      setLogs(updatedLogs);
+      localStorage.setItem('logs', JSON.stringify(updatedLogs));
+
+      if (apiUrl) {
+        try {
+          await fetch(apiUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newLog)
+          });
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    }
+  };
+
+  // --- LOGIC TAB 2: XẢ NÃO ---
+  const handleNuclearWipe = async () => {
+    if (!dumpTag) {
+      showToast('Vui lòng chọn 1 chủ đề xả não!', 'error');
+      return;
+    }
+    if (!dumpText.trim()) {
+      showToast('Vui lòng viết uất ức trước khi xả!', 'error');
+      return;
+    }
+
+    setIsWiping(true);
+
+    const text = dumpText.trim();
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+
+    const negativeWords = ['tức', 'giận', 'điên', 'ghét', 'bực', 'nản', 'áp lực', 'mệt', 'tệ', 'khóc', 'hận', 'chán'];
+    let emotion = 'Mệt mỏi';
+    let score = 0;
+    negativeWords.forEach(word => {
+      if (text.toLowerCase().includes(word)) score++;
+    });
+
+    if (score >= 4) emotion = 'Phẫn nộ dữ dội 🌋';
+    else if (score >= 2) emotion = 'Ấm ức / Uất nghẹn 🌋';
+    else if (wordCount > 100) emotion = 'Quá tải cảm xúc 🧠';
+
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const newLog = {
+      id: Date.now().toString(),
+      createdAt: timestamp,
+      moodRating: 1, // Sập nguồn
+      contextTag: 'Xả não',
+      lessonNote: `Xả não: [${dumpTag}] - Độ dài ${wordCount} từ`,
+      storyDetail: `Đúc kết cảm xúc: [${emotion}]`
+    };
+
+    const updatedLogs = [...logs, newLog];
+    setLogs(updatedLogs);
+    localStorage.setItem('logs', JSON.stringify(updatedLogs));
+
+    if (apiUrl) {
+      try {
+        await fetch(apiUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newLog)
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    setTimeout(() => {
+      setDumpText('');
+      setDumpTag('');
+      setIsWiping(false);
+      showToast('Nội dung đã bốc hơi hoàn toàn! Đã ghi nhận chỉ số.');
+    }, 600);
+  };
+
+  // --- LOGIC TAB 3: STATISTICS & AI ORACLE ---
+  
+  const computeStats = () => {
+    let brakesCount = 0;
+    let dumpsCount = 0;
+    let highEnergyCount = 0;
+    let lowEnergyCount = 0;
+    let dumpTriggers = {};
+
+    logs.forEach(l => {
+      if (l.contextTag === 'Trước giờ G') {
+        brakesCount++;
+      } else if (l.contextTag === 'Xả não') {
+        dumpsCount++;
+        const match = l.lessonNote.match(/\[(.*?)\]/);
+        if (match && match[1]) {
+          const tag = match[1];
+          dumpTriggers[tag] = (dumpTriggers[tag] || 0) + 1;
+        }
+      } else {
+        if (l.moodRating >= 4) highEnergyCount++;
+        if (l.moodRating <= 2) lowEnergyCount++;
+      }
+    });
+
+    let maxTrigger = 'Chưa có';
+    let maxCount = 0;
+    for (const [tag, count] of Object.entries(dumpTriggers)) {
+      if (count > maxCount) {
+        maxCount = count;
+        maxTrigger = tag;
+      }
+    }
+
+    const emojiMap = { 'Công việc': '💼', 'Bạn bè': '🤝', 'Gia đình': '🏠', 'Bản thân': '🧘' };
+    const triggerText = maxCount > 0 ? `${emojiMap[maxTrigger] || ''} ${maxTrigger} (${maxCount} lần)` : 'Chưa có dữ liệu';
+
+    return {
+      brakesCount,
+      dumpsCount,
+      highEnergyCount,
+      lowEnergyCount,
+      triggerText
+    };
+  };
+
+  const { brakesCount, dumpsCount, highEnergyCount, lowEnergyCount, triggerText } = computeStats();
+
+  const renderSvgChart = () => {
+    const chartLogs = logs.filter(l => l.contextTag !== 'Trước giờ G' && l.contextTag !== 'Xả não');
+    if (chartLogs.length === 0) return { path: '', points: [] };
+
+    const last7 = chartLogs.slice(-7).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    const width = 100;
+    const height = 30;
+    const paddingX = 10;
+    const paddingY = 5;
+
+    const usableWidth = width - 2 * paddingX;
+    const usableHeight = height - 2 * paddingY;
+    const stepX = last7.length > 1 ? usableWidth / (last7.length - 1) : usableWidth;
+
+    const points = last7.map((l, index) => {
+      const x = paddingX + index * stepX;
+      const normY = (l.moodRating - 1) / 4;
+      const y = height - paddingY - normY * usableHeight;
+      return { x, y, rating: l.moodRating, date: l.createdAt.substring(5, 10) };
+    });
+
+    let pathD = '';
+    if (points.length > 0) {
+      pathD = `M ${points[0].x} ${points[0].y}`;
+      for (let i = 1; i < points.length; i++) {
+        pathD += ` L ${points[i].x} ${points[i].y}`;
+      }
+    }
+
+    return { pathD, points };
+  };
+
+  const { pathD, points: chartPoints } = renderSvgChart();
+
+  const handleRequestAI = async () => {
+    setIsLoadingAdvice(true);
+    setOracleAdvice(null);
+
+    if (apiUrl) {
+      try {
+        const res = await fetch(`${apiUrl}?action=getAdvice`);
+        const data = await res.json();
+        if (data && !data.error) {
+          setOracleAdvice(data);
+          setIsLoadingAdvice(false);
+          return;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    setTimeout(() => {
+      const last7 = logs.slice(-7);
+      let sumMood = 0;
+      let count = 0;
+      let xanaoCount = 0;
+      let localBrakes = 0;
+
+      last7.forEach(l => {
+        if (l.contextTag === 'Xả não') xanaoCount++;
+        else if (l.contextTag === 'Trước giờ G') localBrakes++;
+        else {
+          sumMood += l.moodRating;
+          count++;
+        }
+      });
+
+      const avgMood = count > 0 ? sumMood / count : 3;
+
+      let simulated = {};
+      if (xanaoCount >= 2) {
+        simulated = {
+          patternTitle: `Quá tải cảm xúc & Đang sập nguồn (Đã xả não ${xanaoCount} lần, phanh gấp ${localBrakes} lần)`,
+          patternDesc: "Lịch sử tuần qua cho thấy bạn liên tục rơi vào trạng thái bùng nổ uất ức. Hệ thần kinh của bạn đang phản kháng bằng cách kích hoạt cơ chế giả chết (sập nguồn/đóng băng) sau các sự kiện gây áp lực.",
+          seriousAdvice: "Phân tích tâm lý chỉ ra áp lực từ công việc hoặc bạn bè đang đè nặng. Bạn đã tự phanh " + localBrakes + " lần, chứng tỏ bạn có nỗ lực tự kiểm soát, nhưng gốc rễ là cơ thể đang kiệt quệ. Đừng cố gồng gánh thêm trách nhiệm.",
+          funnyAdvice: "Đồng chí ơi, tuần này 'xả rác cảm xúc' tận " + xanaoCount + " lần rồi, lại thêm " + localBrakes + " lần phanh gấp gồng mình mệt mỏi. Định làm siêu nhân gánh tạ à? Hệ thần kinh nó đình công rồi kìa, thôi xin lỗi bản thân rồi đi ngủ đi má, gồng chi cho mệt người!",
+          microAction: "Sập nguồn chủ động: Đóng toàn bộ máy tính, tắt thông báo điện thoại và dành 30 phút nằm yên nghỉ ngơi hoàn toàn, tuyệt đối không tự trách mình."
+        };
+      } else if (avgMood > 3.8) {
+        simulated = {
+          patternTitle: `Peak năng lượng cao & Dễ vạ miệng (Phanh gấp ${localBrakes} lần)`,
+          patternDesc: "Tâm trạng trung bình tuần đạt " + avgMood.toFixed(1) + "/5. Năng lượng hưng phấn ở mức rất cao. Khi gặp đám đông, sự phấn khích dễ cuốn bạn đi xa hơn ranh giới an toàn.",
+          seriousAdvice: "Trạng thái hưng phấn kéo dài dễ làm suy giảm khả năng tự soi chiếu (mau quên bài học). Bạn đã phanh " + localBrakes + " lần trước giờ G, đây là tín hiệu tốt. Hãy tiếp tục duy trì bộ lọc 3 giây để điều hòa giao tiếp.",
+          funnyAdvice: "Vibe đang lên chín tầng mây rồi đúng không? Coi chừng nói dai nói dài lại thành nói dại nha cưng. Đã tự phanh " + localBrakes + " lần rồi thì nhớ giữ cái phanh đó cho chặt. Gặp người ta bớt buôn dưa lê drama lại, nghe nhiều nói ít thôi cho nó sang!",
+          microAction: "Mỗi khi thấy bắt đầu nói nhanh và hăng hái, hãy uống một ngụm nước ấm và im lặng đúng 5 giây trước khi phản hồi người khác."
+        };
+      } else if (avgMood < 2.5) {
+        simulated = {
+          patternTitle: `Sụt giảm năng lượng & Dễ thất vọng (Phanh gấp ${localBrakes} lần)`,
+          patternDesc: "Mood tuần chạm đáy " + avgMood.toFixed(1) + "/5. Sự mệt mỏi thể chất đang bóp méo suy nghĩ của bạn, khiến bạn dễ hụt hẫng và suy diễn tiêu cực về hành động của bạn bè.",
+          seriousAdvice: "Khi cơ thể sụt pin, khao khát đồng điệu tuyệt đối sẽ tăng cao, dễ sinh kỳ vọng phi thực tế. Bạn trung lập là do tính cách họ, không phải họ ghét bỏ bạn. Hãy thực hành ranh giới cảm xúc rõ ràng.",
+          funnyAdvice: "Đang hết pin rã rời nên nhìn đời qua kính đen đúng không? Lại ngồi suy diễn bạn bè chả thương mình nữa rồi. Tỉnh táo lại đi má ơi! Người ta bận việc hoặc thẳng tính thôi, đừng có bắt người ta phải chiều chuộng cảm xúc của mình mãi thế!",
+          microAction: "Gắn nhãn (Disclaimer) ngay đầu câu khi tâm sự: 'Tớ kể để xả thôi, cứ đứng về phía tớ nhé, đừng phân tích đúng sai'."
+        };
+      } else {
+        simulated = {
+          patternTitle: `Cân bằng lý trí (Đã phanh ${localBrakes} lần, xả não ${xanaoCount} lần)`,
+          patternDesc: "Chu kỳ 7 ngày qua rất ổn định với mood trung bình " + avgMood.toFixed(1) + "/5. Bạn đã phối hợp nhịp nhàng giữa phanh gấp chủ động và xả áp cảm xúc kịp thời.",
+          seriousAdvice: "Duy trì khoảng xám im lặng tinh tế là chìa khóa. Việc chấp nhận sự im lặng ấm áp trong giao tiếp có sức hút hơn nhiều so với việc cố gồng mình nói chuyện.",
+          funnyAdvice: "Tuần này trộm vía ngoan ngoãn, không thấy vạ miệng mà cũng không sập nguồn. Đã tự phanh " + localBrakes + " lần rất uy tín. Cứ nhịp điệu này mà đi nha cưng, đừng có tự dưng nổi hứng kiếm chuyện làm sượng cuộc chơi!",
+          microAction: "Tiếp tục duy trì năng lượng vừa phải. Giao tiếp bình tĩnh, lắng nghe nhiều hơn để bảo toàn vibe chung."
+        };
+      }
+
+      setOracleAdvice(simulated);
+      setIsLoadingAdvice(false);
+    }, 1200);
+  };
+
+  return (
+    <div className="w-full max-w-md bg-darkbg border-x border-darkborder flex flex-col relative overflow-hidden shadow-2xl min-h-screen">
+      
+      {/* Top Header */}
+      <header className="bg-darkcard/50 backdrop-blur-md px-6 py-4 flex justify-between items-center border-b border-darkborder sticky top-0 z-40">
+        <div className="flex items-center space-x-2">
+          <div className="w-3 h-3 bg-brandred rounded-full animate-pulse"></div>
+          <span className="font-bold text-lg tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-rose-500 via-purple-500 to-blue-500">MindFlow</span>
+        </div>
+        <button onClick={() => setShowSettings(true)} className="text-gray-400 hover:text-white transition-colors">
+          <Settings className="w-5 h-5" />
+        </button>
+      </header>
+
+      {/* Main content viewport */}
+      <main className="flex-1 overflow-y-auto no-scrollbar pb-24 px-6 pt-4">
+
+        {/* ================== TAB 1: PRE-MEETING BUFFER ================== */}
+        {activeTab === 'buffer' && (
+          <div className="space-y-6">
+            {/* Nút Sắp Vào Trận */}
+            <div className="bg-gradient-to-b from-rose-950/20 to-transparent p-5 rounded-2xl border border-rose-900/30 text-center space-y-4">
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-rose-400">Tiện ích "Trước Giờ G"</h2>
+              <p className="text-sm text-gray-400">Bấm nút phanh này để kích hoạt lại bộ nhớ, đối diện với bài học xương máu trước khi bắt đầu giao tiếp.</p>
+              <button 
+                onClick={handleTriggerBuffer}
+                className="w-full py-4 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 active:scale-95 text-white font-semibold rounded-xl shadow-lg shadow-rose-950/50 transition-all duration-200 flex items-center justify-center space-x-2"
+              >
+                <Zap className="w-5 h-5 fill-current" />
+                <span>SẮP VÀO TRẬN / GẶP MẶT</span>
+              </button>
+            </div>
+
+            {/* Form Check-in */}
+            <div className="bg-darkcard p-5 rounded-2xl border border-darkborder space-y-5">
+              <h3 className="font-medium text-gray-200 flex items-center space-x-2">
+                <BookOpen className="w-4 h-4 text-brandblue" />
+                <span>Khóa Bài Học Mới (Check-in)</span>
+              </h3>
+
+              {/* Mood Slider */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <label className="text-gray-400">Tâm trạng hiện tại:</label>
+                  <span className="font-semibold text-brandblue">{getMoodLabelText(moodRating)}</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="1" 
+                  max="5" 
+                  value={moodRating} 
+                  onChange={(e) => setMoodRating(e.target.value)}
+                  className="w-full h-2 bg-darkborder rounded-lg appearance-none cursor-pointer accent-brandblue"
+                />
+                <div className="flex justify-between text-xs text-gray-500 px-1">
+                  <span>❄️ Sập nguồn</span>
+                  <span>😐 Cân bằng</span>
+                  <span>🔥 Phấn khích</span>
+                </div>
+              </div>
+
+              {/* Context Badges */}
+              <div className="space-y-2">
+                <label className="text-sm text-gray-400 block">Bối cảnh giao tiếp:</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['Bạn bè', 'Gia đình', 'Công việc', 'Đám đông', 'Một mình', 'Người khác'].map((ctx) => {
+                    const iconMap = { 'Bạn bè': '🤝', 'Gia đình': '🏠', 'Công việc': '💼', 'Đám đông': '🗣️', 'Một mình': '🧘', 'Người khác': '👥' };
+                    const isSelected = selectedContext === ctx;
+                    return (
+                      <button
+                        key={ctx}
+                        onClick={() => setSelectedContext(ctx)}
+                        className={`py-2.5 px-1 text-xs font-medium rounded-lg border transition-all duration-200 ${
+                          isSelected 
+                            ? 'bg-brandblue/20 text-brandblue border-brandblue/50' 
+                            : 'bg-darkbg text-gray-400 border-darkborder'
+                        }`}
+                      >
+                        {iconMap[ctx]} {ctx}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Lesson Input */}
+              <div className="space-y-2">
+                <label className="text-sm text-gray-400 block">Ghi chú 1 dòng (Bài học xương máu):</label>
+                <input 
+                  type="text" 
+                  value={lessonNote}
+                  onChange={(e) => setLessonNote(e.target.value)}
+                  placeholder="Ví dụ: Nói quá đà với hội A, bớt kỳ vọng..." 
+                  className="w-full py-2.5 px-4 bg-darkbg border border-darkborder rounded-xl focus:border-brandblue focus:outline-none text-sm text-gray-200 transition-colors"
+                />
+              </div>
+
+              {/* Story Note Toggle */}
+              <div className="space-y-2">
+                <button 
+                  onClick={() => setIsStoryOpen(!isStoryOpen)}
+                  className="text-xs text-brandblue hover:underline flex items-center space-x-1"
+                >
+                  <span>{isStoryOpen ? '- Thu gọn nhật ký chi tiết' : '+ Viết thêm nhật ký chi tiết câu chuyện'}</span>
+                </button>
+                {isStoryOpen && (
+                  <textarea 
+                    value={storyDetail}
+                    onChange={(e) => setStoryDetail(e.target.value)}
+                    rows={3} 
+                    placeholder="Kể chi tiết chuyện gì đã xảy ra... Điều này sẽ giúp bạn dễ hình dung lại bối cảnh cụ thể khi được nhắc nhở lần sau." 
+                    className="w-full p-4 bg-darkbg border border-darkborder rounded-xl focus:border-brandblue focus:outline-none text-sm text-gray-200 transition-colors"
+                  />
+                )}
+              </div>
+
+              {/* Save Button */}
+              <button 
+                onClick={handleSaveLog}
+                className="w-full py-3 bg-brandblue hover:bg-blue-600 text-white font-medium rounded-xl transition-colors flex items-center justify-center space-x-2"
+              >
+                <Check className="w-4 h-4" />
+                <span>Khóa Bài Học</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================== TAB 2: BRAIN DUMP ZONE ================== */}
+        {activeTab === 'dump' && (
+          <div className="space-y-4 flex flex-col h-full">
+            <div className="flex-1 flex flex-col bg-darkcard border border-darkborder rounded-2xl p-5 space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="font-medium text-gray-200 flex items-center space-x-2">
+                  <Flame className="w-4 h-4 text-brandred" />
+                  <span>Vùng Xả Não (Brain Dump)</span>
+                </h3>
+                <span className="text-xs text-rose-500 bg-rose-950/20 px-2.5 py-1 rounded-full border border-rose-900/30">Mật 100%</span>
+              </div>
+              
+              <p className="text-xs text-gray-400 leading-relaxed">Hãy gõ điên cuồng tất cả những uất ức, drama, tức giận ở đây để xả giận. Nội dung chữ viết của bạn sẽ bị hủy diệt vĩnh viễn, chúng tôi chỉ lưu lại <b>mức độ uất ức</b> và <b>tâm trạng đúc kết</b> để thống kê tần suất cảm xúc tiêu cực.</p>
+              
+              {/* Dump Tag Selection */}
+              <div className="space-y-2">
+                <label className="text-xs text-gray-400 block">Chủ đề gây ức chế:</label>
+                <div className="flex flex-wrap gap-2">
+                  {['Công việc', 'Bạn bè', 'Gia đình', 'Bản thân'].map(tag => {
+                    const iconMap = { 'Công việc': '💼', 'Bạn bè': '🤝', 'Gia đình': '🏠', 'Bản thân': '🧘' };
+                    const isSelected = dumpTag === tag;
+                    return (
+                      <button
+                        key={tag}
+                        onClick={() => setDumpTag(tag)}
+                        className={`py-1.5 px-3 text-xs font-medium rounded-lg border transition-all duration-200 ${
+                          isSelected 
+                            ? 'bg-brandred/20 text-brandred border-brandred/50' 
+                            : 'bg-darkbg text-gray-400 border-darkborder'
+                        }`}
+                      >
+                        {iconMap[tag]} {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Textarea */}
+              <div className="flex-1 relative">
+                <textarea 
+                  value={dumpText}
+                  onChange={(e) => setDumpText(e.target.value)}
+                  placeholder="Gõ mọi bực dọc vào đây... Đừng ngại ngần gì..." 
+                  className={`w-full h-64 p-4 bg-darkbg border border-darkborder rounded-xl focus:border-brandred focus:outline-none text-sm text-gray-200 resize-none font-light leading-relaxed ${
+                    isWiping ? 'nuclear-wipe-animation' : ''
+                  }`}
+                />
+              </div>
+
+              {/* Nuclear Wipe Button */}
+              <button 
+                onClick={handleNuclearWipe}
+                className="w-full py-4 bg-gradient-to-r from-brandred to-rose-700 hover:from-rose-600 hover:to-rose-800 text-white font-semibold rounded-xl shadow-lg shadow-rose-950/20 active:scale-95 transition-all duration-200 flex items-center justify-center space-x-2"
+              >
+                <Flame className="w-5 h-5" />
+                <span>HỦY DIỆT VĨNH VIỄN (Nuclear Wipe)</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================== TAB 3: AI ORACLE ================== */}
+        {activeTab === 'oracle' && (
+          <div className="space-y-6">
+            {/* Biểu đồ Mood Trend */}
+            <div className="bg-darkcard p-5 rounded-2xl border border-darkborder space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="font-medium text-gray-200 flex items-center space-x-2">
+                  <TrendingUp className="w-4 h-4 text-brandviolet" />
+                  <span>Xu Hướng Cảm Xúc (7 Ngày)</span>
+                </h3>
+                <span className="text-xs text-gray-500 font-light font-sans">Dao động: 1 - 5</span>
+              </div>
+
+              {/* SVG Chart */}
+              <div className="w-full h-32 flex items-center justify-center relative bg-darkbg/50 rounded-xl overflow-hidden border border-darkborder/50">
+                {chartPoints.length === 0 ? (
+                  <div className="text-xs text-gray-500">Chưa có dữ liệu cảm xúc nào được lưu.</div>
+                ) : (
+                  <svg className="w-full h-full p-2" viewBox="0 0 100 30" preserveAspectRatio="none">
+                    <line x1="0" y1="5" x2="100" y2="5" stroke="#24242B" strokeWidth="0.2" strokeDasharray="1 1"/>
+                    <line x1="0" y1="15" x2="100" y2="15" stroke="#24242B" strokeWidth="0.2" stroke-dasharray="1 1"/>
+                    <line x1="0" y1="25" x2="100" y2="25" stroke="#24242B" strokeWidth="0.2" stroke-dasharray="1 1"/>
+                    
+                    <path d={pathD} fill="none" stroke="url(#gradient-violet-react)" strokeWidth="1.2" strokeLinecap="round"/>
+                    
+                    {chartPoints.map((pt, i) => (
+                      <circle 
+                        key={i}
+                        cx={pt.x} 
+                        cy={pt.y} 
+                        r="1.2" 
+                        fill="#1F1F27" 
+                        stroke="#8B5CF6" 
+                        strokeWidth="0.6"
+                      >
+                        <title>Ngày {pt.date}: Mood {pt.rating}/5</title>
+                      </circle>
+                    ))}
+                    <defs>
+                      <linearGradient id="gradient-violet-react" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#3B82F6" />
+                        <stop offset="50%" stopColor="#8B5CF6" />
+                        <stop offset="100%" stopColor="#E11D48" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                )}
+              </div>
+            </div>
+
+            {/* Bảng chỉ số Tự soi chiếu */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-darkcard p-4 rounded-xl border border-darkborder flex flex-col justify-between">
+                <div className="flex items-center space-x-2 text-xs text-gray-400">
+                  <ShieldAlert className="w-4 h-4 text-rose-500" />
+                  <span>Đã phanh gấp</span>
+                </div>
+                <div className="mt-2 flex items-baseline space-x-1">
+                  <span className="text-2xl font-bold text-rose-500">{brakesCount}</span>
+                  <span className="text-[10px] text-gray-500">lần trước giờ G</span>
+                </div>
+              </div>
+
+              <div className="bg-darkcard p-4 rounded-xl border border-darkborder flex flex-col justify-between">
+                <div className="flex items-center space-x-2 text-xs text-gray-400">
+                  <Flame className="w-4 h-4 text-brandred" />
+                  <span>Đã xả áp</span>
+                </div>
+                <div className="mt-2 flex items-baseline space-x-1">
+                  <span className="text-2xl font-bold text-brandred">{dumpsCount}</span>
+                  <span className="text-[10px] text-gray-500">lần xả não</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Phân tích chi tiết tuần */}
+            <div className="bg-darkcard p-5 rounded-2xl border border-darkborder space-y-4">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Phân Tích Chi Tiết Tuần</h4>
+              
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div className="space-y-2 bg-darkbg/40 p-3 rounded-xl border border-darkborder/50">
+                  <span className="text-gray-400 block font-light">Trồi sụt năng lượng:</span>
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <span>🚀 Hưng phấn (4-5):</span>
+                      <span className="font-bold text-brandblue">{highEnergyCount} lần</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>❄️ Sập nguồn (1-2):</span>
+                      <span className="font-bold text-rose-400">{lowEnergyCount} lần</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2 bg-darkbg/40 p-3 rounded-xl border border-darkborder/50 flex flex-col justify-between">
+                  <span className="text-gray-400 block font-light">Nguồn cơn ức chế nhất:</span>
+                  <div className="font-bold text-brandred text-xs mt-1 leading-snug">{triggerText}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Nút Gọi AI Oracle */}
+            <div className="space-y-4">
+              <button 
+                onClick={handleRequestAI}
+                disabled={isLoadingAdvice}
+                className="w-full py-4 bg-gradient-to-r from-brandviolet to-indigo-700 hover:from-purple-600 hover:to-indigo-800 text-white font-semibold rounded-xl shadow-lg shadow-purple-950/20 active:scale-95 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+              >
+                <Sparkles className="w-5 h-5 fill-current text-purple-200" />
+                <span>Nhận Lời Khuyên Từ Bản Thân</span>
+              </button>
+
+              {/* Khung Kết Quả Oracle */}
+              {(isLoadingAdvice || oracleAdvice) && (
+                <div className="bg-darkcard border border-darkborder rounded-2xl p-5 space-y-4">
+                  <div className="flex justify-between items-center border-b border-darkborder pb-3">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 rounded-full bg-brandviolet/20 flex items-center justify-center border border-brandviolet/40">
+                        <Bot className="w-4.5 h-4.5 text-brandviolet" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-200">AI Oracle (Bộ nhớ ngoài)</h4>
+                        <p className="text-[10px] text-gray-500 font-sans">Đã đối chiếu Master Advice & Logs</p>
+                      </div>
+                    </div>
+                    
+                    {oracleAdvice && (
+                      <div className="flex bg-darkbg border border-darkborder p-0.5 rounded-lg text-[10px] font-medium">
+                        <button 
+                          onClick={() => setOracleTone('serious')} 
+                          className={`py-1 px-2.5 rounded-md transition-all ${
+                            oracleTone === 'serious' 
+                              ? 'text-brandviolet bg-darkborder font-semibold' 
+                              : 'text-gray-400'
+                          }`}
+                        >
+                          👔 Nghiêm túc
+                        </button>
+                        <button 
+                          onClick={() => setOracleTone('funny')} 
+                          className={`py-1 px-2.5 rounded-md transition-all ${
+                            oracleTone === 'funny' 
+                              ? 'text-brandviolet bg-darkborder font-semibold' 
+                              : 'text-gray-400'
+                          }`}
+                        >
+                          🎭 Cợt nhả
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {isLoadingAdvice ? (
+                    <div className="flex items-center space-x-2 text-brandviolet animate-pulse justify-center py-4">
+                      <Loader className="w-5 h-5 animate-spin" />
+                      <span className="text-sm">AI đang phân tích chuỗi sự kiện và đúc kết lời khuyên...</span>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-300 space-y-3 leading-relaxed font-light">
+                      <p className="font-medium text-rose-400 flex items-center">
+                        ⚠️ [Chu kỳ tâm lý 7 ngày qua]: {oracleAdvice.patternTitle}
+                      </p>
+                      <p className="text-xs leading-relaxed">{oracleAdvice.patternDesc}</p>
+                      
+                      {oracleTone === 'serious' ? (
+                        <>
+                          <p className="font-medium text-amber-400 mt-3 flex items-center space-x-1">
+                            <span>👔 [Lời khuyên nghiêm túc]:</span>
+                          </p>
+                          <p className="text-xs leading-relaxed">{oracleAdvice.seriousAdvice}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-medium text-purple-400 mt-3 flex items-center space-x-1">
+                            <span>🎭 [Lời khuyên cợt nhả từ chí cốt]:</span>
+                          </p>
+                          <p className="text-xs italic text-purple-200 leading-relaxed">"{oracleAdvice.funnyAdvice}"</p>
+                        </>
+                      )}
+
+                      <p className="font-medium text-emerald-400 mt-3 flex items-center space-x-1">
+                        <span>🎯 [Hành động khuyến nghị hôm nay]:</span>
+                      </p>
+                      <div className="text-xs bg-emerald-950/20 p-2.5 rounded-lg border border-emerald-900/30 font-semibold text-emerald-300">
+                        {oracleAdvice.microAction}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+        )}
+
+      </main>
+
+      {/* Bottom Navigation Bar */}
+      <nav className="absolute bottom-0 inset-x-0 bg-darkcard/80 backdrop-blur-lg border-t border-darkborder flex justify-around items-center py-3 px-2 z-40">
+        <button 
+          onClick={() => switchTab('buffer')}
+          className={`flex flex-col items-center space-y-1 transition-all duration-200 ${
+            activeTab === 'buffer' ? 'text-brandblue scale-105' : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          <ShieldAlert className="w-5 h-5" />
+          <span className="text-[10px] font-medium uppercase tracking-wider font-sans">Phanh Gấp</span>
+        </button>
+        <button 
+          onClick={() => switchTab('dump')}
+          className={`flex flex-col items-center space-y-1 transition-all duration-200 ${
+            activeTab === 'dump' ? 'text-brandred scale-105' : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          <Flame className="w-5 h-5" />
+          <span className="text-[10px] font-medium uppercase tracking-wider font-sans">Xả Não</span>
+        </button>
+        <button 
+          onClick={() => switchTab('oracle')}
+          className={`flex flex-col items-center space-y-1 transition-all duration-200 ${
+            activeTab === 'oracle' ? 'text-brandviolet scale-105' : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          <Sparkles className="w-5 h-5" />
+          <span className="text-[10px] font-medium uppercase tracking-wider font-sans">AI Oracle</span>
+        </button>
+      </nav>
+
+      {/* ================== MODAL: SETTINGS ================== */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/75 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-darkcard border border-darkborder rounded-2xl p-6 space-y-4">
+            <div className="flex justify-between items-center border-b border-darkborder pb-3">
+              <h3 className="font-semibold text-gray-200">Cấu hình API Kết Nối</h3>
+              <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs text-gray-400">Google Apps Script Web App URL:</label>
+                <input 
+                  type="text" 
+                  value={apiUrl}
+                  onChange={(e) => setApiUrl(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/.../exec" 
+                  className="w-full py-2 px-3 bg-darkbg border border-darkborder rounded-lg text-xs focus:outline-none focus:border-brandblue text-gray-200"
+                />
+              </div>
+              <div className="bg-darkbg/50 p-3 rounded-lg border border-darkborder/50 text-[11px] text-gray-500 leading-relaxed font-sans">
+                * Nhập URL Apps Script Web App của bạn để đồng bộ dữ liệu trực tiếp lên Google Sheets. Tạm thời app sẽ lưu cục bộ trong trình duyệt (Local Storage) để chạy thử nghiệm.
+              </div>
+            </div>
+
+
+            <button 
+              onClick={() => {
+                localStorage.setItem('api_url', apiUrl);
+                setShowSettings(false);
+                syncFromSheets(apiUrl);
+              }}
+              className="w-full py-2.5 bg-brandblue hover:bg-blue-600 text-white font-medium rounded-lg text-sm transition-colors"
+            >
+              Lưu Cấu Hình
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================== POPUP MODAL: PRE-MEETING BUFFER ================== */}
+      {showBufferPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/85 backdrop-blur-md">
+          <div className="w-full max-w-sm bg-darkcard border border-rose-900/30 rounded-2xl p-6 space-y-5 flex flex-col max-h-[85vh]">
+            
+            <div className="text-center space-y-1">
+              <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center mx-auto border border-rose-500/20 mb-1">
+                <ShieldAlert className="w-5 h-5 text-rose-500" />
+              </div>
+              <h3 className="font-bold text-lg text-rose-500">THƯ GỬI BẢN THÂN</h3>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-sans">Góc tự soi chiếu - phanh trước giờ G</p>
+            </div>
+
+            {/* Reminders List */}
+            <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 py-2">
+              {bufferLogs.length === 0 ? (
+                <div className="p-4 bg-darkbg rounded-xl border border-darkborder text-center text-gray-500 text-sm">
+                  Bạn chưa có vết thương xương máu nào được ghi lại.
+                </div>
+              ) : (
+                bufferLogs.map((log, index) => (
+                  <div key={log.id} className="p-4 bg-darkbg rounded-xl border border-darkborder space-y-2">
+                    <div className="flex justify-between items-center text-xs font-sans">
+                      <span className="text-brandblue font-semibold uppercase tracking-wider">{log.contextTag}</span>
+                      <span className="text-gray-500">{log.createdAt.substring(5, 10)}</span>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-200">
+                      Thư nhắc nhở {index + 1}: <span className="font-normal text-rose-300">"{log.lessonNote}"</span>
+                    </p>
+                    {log.storyDetail && (
+                      <div className="text-[11px] text-gray-500 bg-darkcard/50 p-2.5 rounded-lg border border-darkborder/50 font-light">
+                        <span className="font-semibold text-gray-400">Chi tiết bối cảnh:</span> {log.storyDetail}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Commitment Slider */}
+            <div className="space-y-3 pt-3 border-t border-darkborder">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-gray-400">Trạng thái cam kết:</span>
+                <span className={`font-semibold ${commitVal >= 95 ? 'text-emerald-400 animate-pulse font-bold' : 'text-rose-500'}`}>
+                  {commitVal >= 95 ? 'ĐÃ CAM KẾT! 👍' : 'Chưa cam kết'}
+                </span>
+              </div>
+              
+              <div className="relative w-full h-12 bg-darkbg border border-darkborder rounded-full overflow-hidden flex items-center">
+                <div className="absolute left-0 top-0 bottom-0 bg-rose-950/40 transition-all duration-100" style={{ width: `${commitVal}%` }}></div>
+                <span className={`absolute inset-0 flex items-center justify-center text-xs font-light pointer-events-none select-none ${
+                  commitVal >= 95 ? 'text-emerald-400 font-bold' : 'text-gray-500'
+                }`}>
+                  {commitVal >= 95 ? 'Thả tay để hoàn tất' : 'Kéo thanh trượt để cam kết'}
+                </span>
+                
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="100" 
+                  value={commitVal} 
+                  onChange={(e) => handleCommitSliderChange(parseInt(e.target.value))}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                
+                <div 
+                  className="absolute w-10 h-10 bg-brandred rounded-full flex items-center justify-center shadow-lg transition-all pointer-events-none"
+                  style={{ left: `calc(${commitVal}% - ${(commitVal / 100) * 40}px + 4px)` }}
+                >
+                  <ChevronRight className="w-5 h-5 text-white" />
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification Popup */}
+      <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 border border-darkborder px-4 py-3 rounded-full text-xs font-light text-gray-300 shadow-2xl transition-all duration-300 flex items-center space-x-2 z-50 ${
+        toast.show ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'
+      }`}>
+        {toast.type === 'error' ? (
+          <AlertTriangle className="w-4 h-4 text-brandred" />
+        ) : (
+          <Info className="w-4 h-4 text-brandblue" />
+        )}
+        <span>{toast.message}</span>
+      </div>
+
+    </div>
+  );
+}

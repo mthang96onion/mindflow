@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Scrollbar hiding */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* nuclear wipe animation */
+.nuclear-wipe-animation {
+  animation: explodeAndFade 0.6s ease-out forwards;
+}
+
+@keyframes explodeAndFade {
+  0% {
+    transform: scale(1);
+    filter: blur(0px) brightness(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.02);
+    filter: blur(2px) brightness(1.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(0.95);
+    filter: blur(15px) brightness(0);
+    opacity: 0;
+  }
+}
