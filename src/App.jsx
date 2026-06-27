@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Settings, Zap, BookOpen, Check, ShieldAlert, ChevronRight, 
-  Flame, TrendingUp, Sparkles, Bot, Loader, Info, X, AlertTriangle, Brain 
+  Flame, TrendingUp, Sparkles, Bot, Loader, Info, X, AlertTriangle, Brain, Flower, Bell 
 } from 'lucide-react';
 
 // Dữ liệu mẫu ban đầu nếu localStorage chưa có
@@ -65,6 +65,112 @@ export default function App() {
       setLogs(stored);
     }
   }, []);
+
+  // Zen Chánh niệm State
+  const [showZen, setShowZen] = useState(false);
+  const [zenStep, setZenStep] = useState(1); // 1, 2, 3
+  const [zenEmotion, setZenEmotion] = useState('');
+  const [zenCycle, setZenCycle] = useState(1);
+  const [isZenInhale, setIsZenInhale] = useState(true);
+
+  // Hiệu ứng thở Chánh niệm tự động chuyển nhịp
+  useEffect(() => {
+    let t;
+    if (zenStep === 2) {
+      if (isZenInhale) {
+        t = setTimeout(() => {
+          setIsZenInhale(false);
+        }, 4000);
+      } else {
+        t = setTimeout(() => {
+          if (zenCycle < 5) {
+            setZenCycle(c => c + 1);
+            setIsZenInhale(true);
+          } else {
+            // Hoàn thành 5 chu kỳ thở -> Sang Bước 3
+            setZenStep(3);
+            playSingingBowl();
+          }
+        }, 4000);
+      }
+    }
+    return () => clearTimeout(t);
+  }, [zenStep, zenCycle, isZenInhale]);
+
+  const playSingingBowl = () => {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    try {
+      const ctx = new AudioContext();
+      const now = ctx.currentTime;
+      const frequencies = [180, 270, 360, 450];
+      frequencies.forEach((freq, index) => {
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+        
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        lfo.frequency.value = 2 + index;
+        lfoGain.gain.value = 1.2;
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        
+        const initialVolume = index === 0 ? 0.35 : 0.15 / index;
+        gainNode.gain.setValueAtTime(0.001, now);
+        gainNode.gain.linearRampToValueAtTime(initialVolume, now + 0.3);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 6.0);
+        
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        lfo.start();
+        osc.start();
+        
+        lfo.stop(now + 6.1);
+        osc.stop(now + 6.1);
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const startZenBreathing = () => {
+    if (!zenEmotion.trim()) {
+      showToast('Vui lòng nhập 1 cảm xúc để bắt đầu ôm ấp!', 'error');
+      return;
+    }
+    setZenStep(2);
+    setZenCycle(1);
+    setIsZenInhale(true);
+  };
+
+  const handleFinishZenSession = () => {
+    const newLog = {
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      moodRating: 3,
+      contextTag: "Chánh niệm",
+      lessonNote: `Gọi tên cảm xúc: ${zenEmotion}`,
+      storyDetail: `Thực hành chánh niệm ôm ấp cảm xúc trong 1 phút thành công.`
+    };
+
+    const updatedLogs = [...logs, newLog];
+    setLogs(updatedLogs);
+    localStorage.setItem('logs', JSON.stringify(updatedLogs));
+
+    if (apiUrl) {
+      fetch(apiUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify(newLog)
+      }).catch(err => console.error(err));
+    }
+
+    setShowZen(false);
+    showToast('Đã lưu phiên thực hành chánh niệm vào nhật ký!');
+  };
 
   // Fetch từ Google Sheet nếu có URL cấu hình
   const syncFromSheets = async (url) => {
@@ -306,6 +412,8 @@ export default function App() {
     let highEnergyCount = 0;
     let lowEnergyCount = 0;
     let dumpTriggers = {};
+    let zenMinutes = 0;
+    let zenEmotions = {};
 
     logs.forEach(l => {
       if (l.contextTag === 'Trước giờ G') {
@@ -316,6 +424,12 @@ export default function App() {
         if (match && match[1]) {
           const tag = match[1];
           dumpTriggers[tag] = (dumpTriggers[tag] || 0) + 1;
+        }
+      } else if (l.contextTag === 'Chánh niệm') {
+        zenMinutes++;
+        const emotion = l.lessonNote.replace('Gọi tên cảm xúc: ', '').trim();
+        if (emotion) {
+          zenEmotions[emotion] = (zenEmotions[emotion] || 0) + 1;
         }
       } else {
         if (l.moodRating >= 4) highEnergyCount++;
@@ -335,19 +449,27 @@ export default function App() {
     const emojiMap = { 'Công việc': '💼', 'Bạn bè': '🤝', 'Gia đình': '🏠', 'Bản thân': '🧘' };
     const triggerText = maxCount > 0 ? `${emojiMap[maxTrigger] || ''} ${maxTrigger} (${maxCount} lần)` : 'Chưa có dữ liệu';
 
+    let topEmotionsStr = 'Chưa có';
+    const sortedEmotions = Object.entries(zenEmotions).sort((a, b) => b[1] - a[1]);
+    if (sortedEmotions.length > 0) {
+      topEmotionsStr = sortedEmotions.slice(0, 2).map(([name, count]) => `${name} (${count}l)`).join(', ');
+    }
+
     return {
       brakesCount,
       dumpsCount,
       highEnergyCount,
       lowEnergyCount,
-      triggerText
+      triggerText,
+      zenMinutes,
+      zenEmotionsStr: topEmotionsStr
     };
   };
 
-  const { brakesCount, dumpsCount, highEnergyCount, lowEnergyCount, triggerText } = computeStats();
+  const { brakesCount, dumpsCount, highEnergyCount, lowEnergyCount, triggerText, zenMinutes, zenEmotionsStr } = computeStats();
 
   const renderSvgChart = () => {
-    const chartLogs = logs.filter(l => l.contextTag !== 'Trước giờ G' && l.contextTag !== 'Xả não');
+    const chartLogs = logs.filter(l => l.contextTag !== 'Trước giờ G' && l.contextTag !== 'Xả não' && l.contextTag !== 'Chánh niệm');
     if (chartLogs.length === 0) return { path: '', points: [] };
 
     const last7 = chartLogs.slice(-7).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
@@ -756,9 +878,20 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="space-y-2 bg-darkbg/40 p-3 rounded-xl border border-darkborder/50 flex flex-col justify-between">
-                  <span className="text-gray-400 block font-light">Nguồn cơn ức chế nhất:</span>
-                  <div className="font-bold text-brandred text-xs mt-1 leading-snug">{triggerText}</div>
+              </div>
+
+              {/* Thống kê Chánh niệm */}
+              <div className="bg-darkbg/40 p-3 rounded-xl border border-darkborder/50 text-xs flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <span className="text-lg select-none">🧘</span>
+                  <div>
+                    <span className="text-gray-400 block text-[10px] font-light">Đã chánh niệm:</span>
+                    <span className="font-bold text-brandviolet text-sm">{zenMinutes} phút</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-gray-400 block text-[10px] font-light">Cảm xúc hay đối mặt nhất:</span>
+                  <span className="font-semibold text-gray-300 text-xs">{zenEmotionsStr}</span>
                 </div>
               </div>
             </div>
@@ -1143,6 +1276,138 @@ export default function App() {
         )}
         <span>{toast.message}</span>
       </div>
+
+      {/* ================== FLOATING ACTION BUTTON (ZEN SHORTCUT) ================== */}
+      <button 
+        onClick={() => {
+          setShowZen(true);
+          setZenStep(1);
+          setZenEmotion('');
+        }}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-brandviolet hover:bg-violet-600 text-white rounded-full flex items-center justify-center shadow-2xl z-40 transition-all duration-300 hover:scale-110 active:scale-95 group animate-pulse-subtle" 
+        title="Vùng Chánh Niệm"
+      >
+        <span className="text-2xl transition-transform group-hover:rotate-12 select-none">🪷</span>
+      </button>
+
+      {/* ================== ZEN OVERLAY (CHÁNH NIỆM TỈNH THỨC) ================== */}
+      {showZen && (
+        <div className="fixed inset-0 z-50 bg-darkbg/95 backdrop-blur-xl flex flex-col justify-between p-6 transition-all duration-500 opacity-100">
+          
+          {/* Top header */}
+          <div className="flex justify-between items-center w-full max-w-md mx-auto pt-4">
+            <div className="flex items-center space-x-2 text-brandviolet">
+              <Flower className="w-5 h-5 animate-spin-slow" />
+              <span className="text-xs uppercase tracking-widest font-sans font-semibold">Vùng Chánh Niệm</span>
+            </div>
+            {zenStep !== 2 && (
+              <button 
+                onClick={() => setShowZen(false)} 
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            )}
+          </div>
+
+          {/* Main Central Workspace */}
+          <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md mx-auto relative">
+            
+            {/* STEP 1: Gọi tên cảm xúc */}
+            {zenStep === 1 && (
+              <div className="w-full space-y-6 text-center">
+                <div className="space-y-2">
+                  <h2 className="text-xl font-bold text-gray-200">Bạn đang cảm thấy thế nào ngay lúc này?</h2>
+                  <p className="text-xs text-gray-400 font-light">Hãy viết 1-2 từ để gọi tên cảm giác thực tại trong bạn.</p>
+                </div>
+                <div className="max-w-xs mx-auto">
+                  <input 
+                    type="text" 
+                    value={zenEmotion}
+                    onChange={(e) => setZenEmotion(e.target.value)}
+                    placeholder="Ví dụ: Ấm ức, Bực tức, Lo sợ..." 
+                    className="w-full p-4 rounded-2xl bg-darkcard border border-darkborder text-center text-lg font-semibold text-gray-200 shadow-inner focus:outline-none focus:border-brandviolet transition-colors"
+                  />
+                </div>
+                <button 
+                  onClick={startZenBreathing}
+                  className="py-3 px-8 bg-brandviolet hover:bg-violet-600 text-white font-medium rounded-xl text-sm transition-all duration-200 shadow-lg"
+                >
+                  Bắt đầu ôm ấp cảm xúc
+                </button>
+              </div>
+            )}
+
+            {/* STEP 2: Hơi thở chánh niệm */}
+            {zenStep === 2 && (
+              <div className="w-full space-y-10 text-center">
+                <div className="relative w-64 h-64 mx-auto flex items-center justify-center">
+                  <div className={`absolute inset-0 bg-brandviolet/10 rounded-full blur-xl transition-all duration-[4000ms] ease-in-out ${
+                    isZenInhale ? 'zen-breathing-glow-inhale' : 'zen-breathing-glow-exhale'
+                  }`} />
+                  
+                  <div className={`w-48 h-48 bg-gradient-to-br from-brandviolet/20 to-purple-950/40 border border-brandviolet/30 rounded-full flex flex-col items-center justify-center shadow-2xl transition-all duration-[4000ms] ease-in-out ${
+                    isZenInhale ? 'zen-breathing-inhale' : 'zen-breathing-exhale'
+                  }`}>
+                    <span className="text-xs text-brandviolet font-semibold tracking-wider mb-1 uppercase">
+                      {isZenInhale ? 'HÍT VÀO' : 'THỞ RA'}
+                    </span>
+                    <span className="text-xl font-bold text-white capitalize">{zenEmotion}</span>
+                  </div>
+                </div>
+                
+                <div className="space-y-2 max-w-sm mx-auto h-20 flex flex-col justify-center">
+                  <p className="text-base text-gray-200 font-light leading-relaxed">
+                    {isZenInhale 
+                      ? `Hít vào, tôi nhận diện sự [${zenEmotion}] đang có mặt trong tôi...`
+                      : `Thở ra, tôi mỉm cười và ôm ấp lấy sự [${zenEmotion}] của tôi.`
+                    }
+                  </p>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-sans">
+                    Chu kỳ: {zenCycle}/5
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: Buông bỏ & Chuông Thiền */}
+            {zenStep === 3 && (
+              <div className="w-full space-y-8 text-center">
+                <div className="w-20 h-20 rounded-full bg-brandviolet/10 flex items-center justify-center mx-auto border border-brandviolet/20 mb-1 animate-pulse">
+                  <Bell className="w-10 h-10 text-brandviolet" />
+                </div>
+                <div className="space-y-3 max-w-sm mx-auto">
+                  <h2 className="text-lg font-bold text-gray-200">Hãy cảm nhận tiếng ngân của chuông xoay...</h2>
+                  <p className="text-xs text-gray-400 font-light leading-relaxed">
+                    Cảm xúc của bạn đã được nhận biết và ôm ấp. Giờ hãy thả lỏng và nhìn nó tan biến vào hư không.
+                  </p>
+                  <div className="h-10 flex items-center justify-center mt-4">
+                    <span className="text-xl font-bold text-brandviolet/80 uppercase tracking-widest dissolve-fade-out animate-pulse">
+                      {zenEmotion}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="pt-4">
+                  <button 
+                    onClick={handleFinishZenSession}
+                    className="py-3 px-8 bg-brandviolet hover:bg-violet-600 text-white font-medium rounded-xl text-sm transition-all duration-200 shadow-lg"
+                  >
+                    Buông bỏ thành công
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          {/* Outro message */}
+          <div className="w-full text-center pb-4 max-w-md mx-auto">
+            <p className="text-[10px] text-gray-600 uppercase tracking-widest font-sans font-light">Thở vào tâm tĩnh lặng • Thở ra miệng mỉm cười</p>
+          </div>
+
+        </div>
+      )}
 
     </div>
   );
