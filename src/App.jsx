@@ -646,7 +646,7 @@ export default function App() {
 
     if (apiUrl) {
       try {
-        const res = await fetch(`${apiUrl}?action=analyzeEvent&log=${encodeURIComponent(JSON.stringify(log))}`);
+        const res = await fetch(`${apiUrl}?action=analyzeEvent&id=${log.id}`);
         const data = await res.json();
         if (data && !data.error) {
           setEventAnalysisData(data);

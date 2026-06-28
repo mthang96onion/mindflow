@@ -1494,8 +1494,7 @@
       lucide.createIcons();
       
       if (apiUrl) {
-        const logStr = encodeURIComponent(JSON.stringify(log));
-        fetch(`${apiUrl}?action=analyzeEvent&log=${logStr}`)
+        fetch(`${apiUrl}?action=analyzeEvent&id=${log.id}`)
         .then(res => res.json())
         .then(data => {
           if (data && !data.error) {

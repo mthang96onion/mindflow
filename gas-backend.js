@@ -51,12 +51,11 @@ function doGet(e) {
 
   // Nhận yêu cầu phân tích sự kiện cụ thể qua GET để tránh lỗi CORS
   if (action === "analyzeEvent") {
-    try {
-      const log = JSON.parse(decodeURIComponent(e.parameter.log));
-      return handleAnalyzeEvent(log);
-    } catch(err) {
-      return getCorsResponse({ error: "Lỗi giải mã tham số log: " + err.toString() });
+    const id = e.parameter.id;
+    if (!id) {
+      return getCorsResponse({ error: "Thiếu tham số id" });
     }
+    return handleAnalyzeEvent(id);
   }
   
   return getCorsResponse({ error: "Action không hợp lệ. Vui lòng sử dụng action=getLogs hoặc action=getAdvice" });
@@ -178,10 +177,38 @@ function handleGetInstantAdvice(text, tag) {
 }
 
 /**
- * Endpoint AI: Phân tích một sự kiện giao tiếp chọn lọc ở Tab 3
+ * Endpoint AI: Phân tích một sự kiện giao tiếp chọn lọc ở Tab 3 bằng ID
  */
-function handleAnalyzeEvent(log) {
+function handleAnalyzeEvent(logId) {
   try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_DAILY_LOGS);
+    if (!sheet) {
+      return getCorsResponse({ error: "Không tìm thấy sheet Daily_Logs" });
+    }
+    
+    // Tìm dòng có ID tương ứng để lấy thông tin phân tích
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const idCol = headers.indexOf("id");
+    
+    let log = null;
+    for (let i = 1; i < data.length; i++) {
+      const sheetIdStr = String(data[i][idCol]).replace(/\.0$/, "").trim();
+      const targetIdStr = String(logId).replace(/\.0$/, "").trim();
+      if (sheetIdStr === targetIdStr) {
+        log = {};
+        headers.forEach((h, idx) => {
+          log[h] = data[i][idx];
+        });
+        break;
+      }
+    }
+    
+    if (!log) {
+      return getCorsResponse({ error: "Không tìm thấy sự kiện có ID trên Sheets: " + logId });
+    }
+
     const apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
     if (!apiKey) {
       return getCorsResponse({ error: "Chưa cấu hình GEMINI_API_KEY trong Project Settings!" });
@@ -229,7 +256,7 @@ function handleAnalyzeEvent(log) {
       
       const parsed = JSON.parse(rawText.trim());
       // Tự động ghi lại kết quả phân tích của AI vào Sheet
-      saveAnalysisToSheet(log.id, parsed.explanation, parsed.recommendation);
+      saveAnalysisToSheet(logId, parsed.explanation, parsed.recommendation);
       
       return getCorsResponse(parsed);
     } else {
