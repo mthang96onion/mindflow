@@ -14,6 +14,63 @@ const defaultLogs = [
   { id: "6", createdAt: "2026-06-26 14:00:00", moodRating: 3, contextTag: "Trước giờ G", lessonNote: "Cam kết phanh khẩn cấp trước khi gặp mặt", storyDetail: "Cam kết thành công" }
 ];
 
+function formatMarkdownToHtml(text) {
+  if (!text) return '';
+  
+  // Escape HTML entities to prevent XSS
+  let escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  
+  // Bold: **text** -> <strong class="text-brandviolet font-bold">text</strong>
+  escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong class="text-brandviolet font-bold">$1</strong>');
+  
+  const lines = escaped.split('\n');
+  let result = [];
+  let inList = false;
+  
+  for (let line of lines) {
+    let trimmed = line.trim();
+    if (!trimmed) {
+      if (inList) {
+        result.push('</ul>');
+        inList = false;
+      }
+      continue;
+    }
+    
+    // Check if it is a list item starting with * or -
+    if (trimmed.startsWith('*') || trimmed.startsWith('-')) {
+      let content = trimmed.replace(/^[\*\-]\s*/, '');
+      if (!inList) {
+        result.push('<ul class="list-disc list-inside space-y-1.5 mt-2 mb-3 pl-2 text-gray-300">');
+        inList = true;
+      }
+      result.push(`<li class="leading-relaxed text-[11px]">${content}</li>`);
+    } else {
+      if (inList) {
+        result.push('</ul>');
+        inList = false;
+      }
+      
+      // Check if it is a numbered list item like "1. Title"
+      const numMatch = trimmed.match(/^(\d+)\.\s(.*)/);
+      if (numMatch) {
+        result.push(`<div class="mt-4 text-xs font-semibold text-gray-200 border-l-2 border-brandviolet pl-3 py-0.5"><span class="text-brandviolet font-bold">${numMatch[1]}.</span> ${numMatch[2]}</div>`);
+      } else {
+        result.push(`<p class="mt-2 leading-relaxed text-gray-300 font-light text-xs">${trimmed}</p>`);
+      }
+    }
+  }
+  
+  if (inList) {
+    result.push('</ul>');
+  }
+  
+  return result.join('\n');
+}
+
 export default function App() {
   // Tab & API State
   const [activeTab, setActiveTab] = useState('buffer');
@@ -987,20 +1044,18 @@ export default function App() {
                         <p className="font-medium text-rose-400">
                           ⚠️ [Chu kỳ tâm lý 7 ngày qua]:
                         </p>
-                        <p className="text-xs leading-relaxed text-gray-200 font-bold">{oracleAdvice.patternTitle}</p>
-                        <p className="text-xs leading-relaxed mt-1 text-gray-300">{oracleAdvice.patternDesc}</p>
+                        <p className="text-xs leading-relaxed text-gray-200 font-bold" dangerouslySetInnerHTML={{ __html: formatMarkdownToHtml(oracleAdvice.patternTitle) }} />
+                        <div className="text-xs leading-relaxed mt-1 text-gray-300" dangerouslySetInnerHTML={{ __html: formatMarkdownToHtml(oracleAdvice.patternDesc) }} />
                         
                         <p className="font-medium text-amber-400 mt-3">
                           👔 [Lời khuyên dài hạn (Master Advice)]:
                         </p>
-                        <p className="text-xs leading-relaxed text-gray-300">{oracleAdvice.seriousAdvice}</p>
+                        <div className="text-xs leading-relaxed text-gray-300" dangerouslySetInnerHTML={{ __html: formatMarkdownToHtml(oracleAdvice.seriousAdvice) }} />
 
                         <p className="font-medium text-emerald-400 mt-3">
                           🎯 [Hành động nhỏ hôm nay]:
                         </p>
-                        <div className="text-xs bg-emerald-950/20 p-2.5 rounded-lg border border-emerald-900/30 font-semibold text-emerald-300">
-                          {oracleAdvice.microAction}
-                        </div>
+                        <div className="text-xs bg-emerald-950/20 p-2.5 rounded-lg border border-emerald-900/30 font-semibold text-emerald-300" dangerouslySetInnerHTML={{ __html: formatMarkdownToHtml(oracleAdvice.microAction) }} />
                       </div>
                     )}
                   </div>
@@ -1059,17 +1114,15 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="text-sm text-gray-300 space-y-3 leading-relaxed font-light font-sans">
-                        <p className="font-medium text-rose-400">
+                        <p className="font-medium text-rose-400 mb-1">
                           🧠 [Giải mã cơ chế tâm lý]:
                         </p>
-                        <p className="text-xs leading-relaxed text-gray-300">{eventAnalysisData.explanation}</p>
+                        <div className="text-xs space-y-2 mb-4" dangerouslySetInnerHTML={{ __html: formatMarkdownToHtml(eventAnalysisData.explanation) }} />
                         
-                        <p className="font-medium text-emerald-400 mt-3">
+                        <p className="font-medium text-emerald-400 mt-4 mb-1">
                           🎯 [Khuyến nghị hướng giải quyết]:
                         </p>
-                        <div className="text-xs bg-emerald-950/20 p-2.5 rounded-lg border border-emerald-900/30 font-semibold text-emerald-300">
-                          {eventAnalysisData.recommendation}
-                        </div>
+                        <div className="text-xs bg-emerald-950/20 p-4 rounded-xl border border-emerald-900/30 text-emerald-300" dangerouslySetInnerHTML={{ __html: formatMarkdownToHtml(eventAnalysisData.recommendation) }} />
                       </div>
                     )}
                   </div>

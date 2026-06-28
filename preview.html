@@ -679,6 +679,64 @@
 
     // --- CÁC HÀM TIỆN ÍCH ---
 
+    function formatMarkdownToHtml(text) {
+      if (!text) return '';
+      
+      // Escape HTML entities to prevent XSS
+      let escaped = text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      
+      // Bold: **text** -> <strong class="text-brandviolet font-bold">text</strong>
+      escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong class="text-brandviolet font-bold">$1</strong>');
+      
+      const lines = escaped.split('\n');
+      let result = [];
+      let inList = false;
+      
+      for (let line of lines) {
+        let trimmed = line.trim();
+        if (!trimmed) {
+          if (inList) {
+            result.push('</ul>');
+            inList = false;
+          }
+          continue;
+        }
+        
+        // Check if it is a list item starting with * or -
+        if (trimmed.startsWith('*') || trimmed.startsWith('-')) {
+          // Remove the marker
+          let content = trimmed.replace(/^[\*\-]\s*/, '');
+          if (!inList) {
+            result.push('<ul class="list-disc list-inside space-y-1.5 mt-2 mb-3 pl-2 text-gray-300">');
+            inList = true;
+          }
+          result.push(`<li class="leading-relaxed text-[11px]">${content}</li>`);
+        } else {
+          if (inList) {
+            result.push('</ul>');
+            inList = false;
+          }
+          
+          // Check if it is a numbered list item like "1. Title"
+          const numMatch = trimmed.match(/^(\d+)\.\s(.*)/);
+          if (numMatch) {
+            result.push(`<div class="mt-4 text-xs font-semibold text-gray-200 border-l-2 border-brandviolet pl-3 py-0.5"><span class="text-brandviolet font-bold">${numMatch[1]}.</span> ${numMatch[2]}</div>`);
+          } else {
+            result.push(`<p class="mt-2 leading-relaxed text-gray-300 font-light text-xs">${trimmed}</p>`);
+          }
+        }
+      }
+      
+      if (inList) {
+        result.push('</ul>');
+      }
+      
+      return result.join('\n');
+    }
+
     function getLogs() {
       return JSON.parse(localStorage.getItem('logs')) || [];
     }
@@ -1338,16 +1396,16 @@
             if (data && !data.error) {
               responseText.innerHTML = `
                 <p class="font-medium text-rose-400">⚠️ [Chu kỳ tâm lý 7 ngày qua]:</p>
-                <p class="text-xs leading-relaxed text-gray-200 font-bold font-sans">${data.patternTitle}</p>
-                <p class="text-xs leading-relaxed mt-1 text-gray-300">${data.patternDesc}</p>
+                <p class="text-xs leading-relaxed text-gray-200 font-bold font-sans">${formatMarkdownToHtml(data.patternTitle)}</p>
+                <div class="text-xs leading-relaxed mt-1 text-gray-300">${formatMarkdownToHtml(data.patternDesc)}</div>
                 
                 <p class="font-medium text-amber-400 mt-4">👔 [Lời khuyên dài hạn (Master Advice)]:</p>
-                <p class="text-xs leading-relaxed text-gray-300">${data.seriousAdvice}</p>
+                <div class="text-xs leading-relaxed text-gray-300">${formatMarkdownToHtml(data.seriousAdvice)}</div>
                 
                 <p class="font-medium text-emerald-400 mt-4">🎯 [Hành động nhỏ hôm nay]:</p>
-                <p class="text-xs bg-emerald-950/20 p-3 rounded-lg border border-emerald-900/30 font-semibold text-emerald-300 mt-1">
-                  ${data.microAction}
-                </p>
+                <div class="text-xs bg-emerald-950/20 p-3 rounded-lg border border-emerald-900/30 font-semibold text-emerald-300 mt-1">
+                  ${formatMarkdownToHtml(data.microAction)}
+                </div>
               `;
             } else {
               showToast('Lỗi AI: ' + (data.error || 'Không xác định'), 'error');
@@ -1416,13 +1474,13 @@
       // Nếu đã có kết quả phân tích lưu sẵn, hiển thị ngay lập tức
       if (log.aiExplanation && log.aiRecommendation) {
         textContainer.innerHTML = `
-          <p class="font-medium text-rose-400">🧠 [Giải mã cơ chế tâm lý (Đã lưu)]:</p>
-          <p class="text-xs leading-relaxed text-gray-300">${log.aiExplanation}</p>
+          <p class="font-medium text-rose-400 mb-2">🧠 [Giải mã cơ chế tâm lý (Đã lưu)]:</p>
+          <div class="text-xs space-y-2 mb-4">${formatMarkdownToHtml(log.aiExplanation)}</div>
           
-          <p class="font-medium text-emerald-400 mt-4">🎯 [Khuyến nghị hướng giải quyết]:</p>
-          <p class="text-xs bg-emerald-950/20 p-3 rounded-lg border border-emerald-900/30 font-semibold text-emerald-300 mt-1">
-            ${log.aiRecommendation}
-          </p>
+          <p class="font-medium text-emerald-400 mt-5 mb-2">🎯 [Khuyến nghị hướng giải quyết]:</p>
+          <div class="text-xs bg-emerald-950/20 p-4 rounded-xl border border-emerald-900/30 text-emerald-300">
+            ${formatMarkdownToHtml(log.aiRecommendation)}
+          </div>
         `;
         return;
       }
@@ -1442,13 +1500,13 @@
         .then(data => {
           if (data && !data.error) {
             textContainer.innerHTML = `
-              <p class="font-medium text-rose-400">🧠 [Giải mã cơ chế tâm lý]:</p>
-              <p class="text-xs leading-relaxed text-gray-300">${data.explanation}</p>
+              <p class="font-medium text-rose-400 mb-2">🧠 [Giải mã cơ chế tâm lý]:</p>
+              <div class="text-xs space-y-2 mb-4">${formatMarkdownToHtml(data.explanation)}</div>
               
-              <p class="font-medium text-emerald-400 mt-4">🎯 [Khuyến nghị hướng giải quyết]:</p>
-              <p class="text-xs bg-emerald-950/20 p-3 rounded-lg border border-emerald-900/30 font-semibold text-emerald-300 mt-1">
-                ${data.recommendation}
-              </p>
+              <p class="font-medium text-emerald-400 mt-5 mb-2">🎯 [Khuyến nghị hướng giải quyết]:</p>
+              <div class="text-xs bg-emerald-950/20 p-4 rounded-xl border border-emerald-900/30 text-emerald-300">
+                ${formatMarkdownToHtml(data.recommendation)}
+              </div>
             `;
             // Cập nhật và lưu vào Local Storage
             log.aiExplanation = data.explanation;
