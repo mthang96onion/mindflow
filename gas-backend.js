@@ -267,7 +267,9 @@ function saveAnalysisToSheet(logId, explanation, recommendation) {
     
     // Tìm dòng có ID tương ứng để cập nhật
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][idCol]) === String(logId)) {
+      const sheetIdStr = String(data[i][idCol]).replace(/\.0$/, "").trim();
+      const targetIdStr = String(logId).replace(/\.0$/, "").trim();
+      if (sheetIdStr === targetIdStr) {
         sheet.getRange(i + 1, expCol + 1).setValue(explanation);
         sheet.getRange(i + 1, recCol + 1).setValue(recommendation);
         break;
