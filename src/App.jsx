@@ -679,6 +679,23 @@ export default function App() {
     }, 1200);
   };
 
+  const handleEventSelectionChange = (id) => {
+    setSelectedEventId(id);
+    if (!id) {
+      setEventAnalysisData(null);
+      return;
+    }
+    const log = logs.find(l => String(l.id) === String(id));
+    if (log && log.aiExplanation && log.aiRecommendation) {
+      setEventAnalysisData({
+        explanation: log.aiExplanation,
+        recommendation: log.aiRecommendation
+      });
+    } else {
+      setEventAnalysisData(null);
+    }
+  };
+
   const getFilterCheckinLogs = () => {
     return logs.filter(l => l.contextTag !== 'Xả não' && l.contextTag !== 'Trước giờ G');
   };
@@ -1070,7 +1087,7 @@ export default function App() {
                   <label className="text-xs text-gray-400 block font-light">Chọn sự kiện giao tiếp/check-in của tuần qua:</label>
                   <select 
                     value={selectedEventId}
-                    onChange={(e) => setSelectedEventId(e.target.value)}
+                    onChange={(e) => handleEventSelectionChange(e.target.value)}
                     className="w-full py-3 px-4 bg-darkbg border border-darkborder rounded-xl text-xs focus:outline-none focus:border-brandviolet text-gray-200 font-sans"
                   >
                     <option value="">-- Chọn sự kiện trong danh sách --</option>

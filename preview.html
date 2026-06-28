@@ -381,7 +381,7 @@
         <div id="oracle-sub-event-section" class="space-y-4 hidden">
           <div class="bg-darkcard p-5 rounded-2xl border border-darkborder space-y-4">
             <label class="text-xs text-gray-400 block font-light">Chọn sự kiện giao tiếp/check-in của tuần qua:</label>
-            <select id="select-event" class="w-full py-3 px-4 bg-darkbg border border-darkborder rounded-xl text-xs focus:outline-none focus:border-brandviolet text-gray-200 font-sans">
+            <select id="select-event" onchange="handleEventSelectionChange(this.value)" class="w-full py-3 px-4 bg-darkbg border border-darkborder rounded-xl text-xs focus:outline-none focus:border-brandviolet text-gray-200 font-sans">
               <!-- Sẽ được điền bằng JS -->
             </select>
             <button onclick="requestEventAnalysis()" class="w-full py-3.5 bg-gradient-to-r from-brandviolet to-indigo-700 hover:from-purple-600 hover:to-indigo-800 text-white font-semibold rounded-xl text-xs transition-all duration-200 flex items-center justify-center space-x-2">
@@ -1452,6 +1452,32 @@
     }
 
     // B. AI phân tích sâu sắc sự kiện chọn lọc
+    function handleEventSelectionChange(logId) {
+      const box = document.getElementById('event-analysis-box');
+      const textContainer = document.getElementById('event-analysis-text');
+      if (!logId) {
+        box.classList.add('hidden');
+        return;
+      }
+      
+      const currentLogs = getLogs();
+      const log = currentLogs.find(l => String(l.id) === String(logId));
+      if (log && log.aiExplanation && log.aiRecommendation) {
+        box.classList.remove('hidden');
+        textContainer.innerHTML = `
+          <p class="font-medium text-rose-400 mb-2">🧠 [Giải mã cơ chế tâm lý (Đã lưu)]:</p>
+          <div class="text-xs space-y-2 mb-4">${formatMarkdownToHtml(log.aiExplanation)}</div>
+          
+          <p class="font-medium text-emerald-400 mt-5 mb-2">🎯 [Khuyến nghị hướng giải quyết]:</p>
+          <div class="text-xs bg-emerald-950/20 p-4 rounded-xl border border-emerald-900/30 text-emerald-300">
+            ${formatMarkdownToHtml(log.aiRecommendation)}
+          </div>
+        `;
+      } else {
+        box.classList.add('hidden');
+      }
+    }
+
     function requestEventAnalysis() {
       const select = document.getElementById('select-event');
       const logId = select.value;
