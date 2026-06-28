@@ -427,6 +427,93 @@
       </button>
     </nav>
 
+    <!-- ================== FLOATING ACTION BUTTON (ZEN SHORTCUT) ================== -->
+    <button onclick="openZenOverlay()" class="absolute bottom-20 right-6 w-14 h-14 bg-brandviolet hover:bg-violet-600 text-white rounded-full flex items-center justify-center shadow-2xl z-40 transition-all duration-300 hover:scale-110 active:scale-95 group animate-pulse-subtle" title="Vùng Chánh Niệm">
+      <span class="text-2xl transition-transform group-hover:rotate-12 select-none">🪷</span>
+    </button>
+
+    <!-- ================== ZEN OVERLAY (CHÁNH NIỆM TỈNH THỨC) ================== -->
+    <div id="zen-overlay" class="absolute inset-0 z-50 bg-darkbg/95 backdrop-blur-xl flex flex-col justify-between p-6 transition-all duration-500 opacity-0 pointer-events-none">
+      
+      <!-- Top header -->
+      <div class="flex justify-between items-center w-full max-w-md mx-auto pt-4">
+        <div class="flex items-center space-x-2 text-brandviolet">
+          <i data-lucide="flower" class="w-5 h-5 animate-spin-slow"></i>
+          <span class="text-xs uppercase tracking-widest font-sans font-semibold">Vùng Chánh Niệm</span>
+        </div>
+        <button onclick="closeZenOverlay()" class="text-gray-400 hover:text-white transition-colors" id="btn-close-zen">
+          <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+      </div>
+
+      <!-- Main Central Workspace -->
+      <div class="flex-1 flex flex-col items-center justify-center w-full max-w-md mx-auto relative">
+        
+        <!-- STEP 1: Gọi tên cảm xúc (Affect Labeling) -->
+        <div id="zen-step-1" class="w-full space-y-6 text-center transition-all duration-300">
+          <div class="space-y-2">
+            <h2 class="text-xl font-bold text-gray-200">Bạn đang cảm thấy thế nào ngay lúc này?</h2>
+            <p class="text-xs text-gray-400 font-light">Hãy viết 1-2 từ để gọi tên cảm giác thực tại trong bạn.</p>
+          </div>
+          <div class="max-w-xs mx-auto">
+            <input type="text" id="zen-emotion-input" placeholder="Ví dụ: Ấm ức, Bực tức, Lo sợ..." class="w-full p-4 rounded-2xl bg-darkcard border border-darkborder text-center text-lg font-semibold text-gray-200 shadow-inner focus:outline-none focus:border-brandviolet transition-colors">
+          </div>
+          <button onclick="startZenBreathing()" class="py-3 px-8 bg-brandviolet hover:bg-violet-600 text-white font-medium rounded-xl text-sm transition-all duration-200 shadow-lg">
+            Bắt đầu ôm ấp cảm xúc
+          </button>
+        </div>
+
+        <!-- STEP 2: Ôm ấp cảm xúc bằng hơi thở (Breathing Cycle) -->
+        <div id="zen-step-2" class="w-full space-y-10 text-center transition-all duration-300 hidden">
+          <!-- Breathing circle container -->
+          <div class="relative w-64 h-64 mx-auto flex items-center justify-center">
+            <!-- Outermost breathing pulse circle -->
+            <div id="breathing-circle-glow" class="absolute inset-0 bg-brandviolet/10 rounded-full blur-xl scale-95 transition-all duration-[4000ms] ease-in-out"></div>
+            <!-- Inner breathing circle -->
+            <div id="breathing-circle" class="w-48 h-48 bg-gradient-to-br from-brandviolet/20 to-purple-950/40 border border-brandviolet/30 rounded-full flex flex-col items-center justify-center shadow-2xl scale-95 transition-all duration-[4000ms] ease-in-out">
+              <span id="breathing-timer" class="text-xs text-brandviolet font-semibold tracking-wider mb-1 uppercase">HÍT VÀO</span>
+              <span id="breathing-emotion" class="text-xl font-bold text-white capitalize">Cơn Giận</span>
+            </div>
+          </div>
+          
+          <!-- Guided prompts -->
+          <div class="space-y-2 max-w-sm mx-auto h-20 flex flex-col justify-center">
+            <p id="breathing-prompt" class="text-base text-gray-200 font-light leading-relaxed"></p>
+            <p id="breathing-cycle-counter" class="text-[10px] text-gray-500 uppercase tracking-widest font-sans">Chu kỳ: 1/5</p>
+          </div>
+        </div>
+
+        <!-- STEP 3: Buông bỏ & Chuông Thiền -->
+        <div id="zen-step-3" class="w-full space-y-8 text-center transition-all duration-300 hidden">
+          <div class="w-20 h-20 rounded-full bg-brandviolet/10 flex items-center justify-center mx-auto border border-brandviolet/20 mb-1 animate-pulse">
+            <i data-lucide="bell" class="w-10 h-10 text-brandviolet"></i>
+          </div>
+          <div class="space-y-3 max-w-sm mx-auto">
+            <h2 class="text-lg font-bold text-gray-200">Hãy cảm nhận tiếng ngân của chuông xoay...</h2>
+            <p class="text-xs text-gray-400 font-light leading-relaxed">
+              Cảm xúc của bạn đã được nhận biết và ôm ấp. Giờ hãy thả lỏng và nhìn nó tan biến vào hư không.
+            </p>
+            <div class="h-10 flex items-center justify-center mt-4">
+              <span id="zen-dissolving-word" class="text-xl font-bold text-brandviolet/80 uppercase tracking-widest transition-all duration-3000 ease-out scale-100 opacity-100"></span>
+            </div>
+          </div>
+          
+          <div class="pt-4">
+            <button onclick="finishZenSession()" class="py-3 px-8 bg-brandviolet hover:bg-violet-600 text-white font-medium rounded-xl text-sm transition-all duration-200 shadow-lg">
+              Buông bỏ thành công
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Outro message at bottom -->
+      <div class="w-full text-center pb-4 max-w-md mx-auto">
+        <p class="text-[10px] text-gray-600 uppercase tracking-widest font-sans font-light">Thở vào tâm tĩnh lặng • Thở ra miệng mỉm cười</p>
+      </div>
+
+    </div>
+
     <!-- ================== MODAL: SETTINGS (URL CONFIGURATION) ================== -->
     <div id="settings-modal" class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/75 backdrop-blur-sm hidden">
       <div class="w-full max-w-sm bg-darkcard border border-darkborder rounded-2xl p-6 space-y-4">
@@ -521,74 +608,6 @@
         </button>
     </div>
 
-    <!-- ================== FLOATING ACTION BUTTON (ZEN SHORTCUT) ================== -->
-    <button onclick="openZenOverlay()" class="fixed bottom-6 right-6 w-14 h-14 bg-brandviolet hover:bg-violet-600 text-white rounded-full flex items-center justify-center shadow-2xl z-40 transition-all duration-300 hover:scale-110 active:scale-95 group animate-pulse-subtle" title="Vùng Chánh Niệm">
-      <span class="text-2xl transition-transform group-hover:rotate-12 select-none">🪷</span>
-    </button>
-
-    <!-- ================== ZEN OVERLAY (CHÁNH NIỆM TỈNH THỨC) ================== -->
-    <div id="zen-overlay" class="fixed inset-0 z-50 bg-darkbg/95 backdrop-blur-xl flex flex-col justify-between p-6 transition-all duration-500 opacity-0 pointer-events-none">
-      
-      <!-- Top header -->
-      <div class="flex justify-between items-center w-full max-w-md mx-auto pt-4">
-        <div class="flex items-center space-x-2 text-brandviolet">
-          <i data-lucide="flower" class="w-5 h-5 animate-spin-slow"></i>
-          <span class="text-xs uppercase tracking-widest font-sans font-semibold">Vùng Chánh Niệm</span>
-        </div>
-        <button onclick="closeZenOverlay()" class="text-gray-400 hover:text-white transition-colors" id="btn-close-zen">
-          <i data-lucide="x" class="w-6 h-6"></i>
-        </button>
-      </div>
-
-      <!-- Main Central Workspace -->
-      <div class="flex-1 flex flex-col items-center justify-center w-full max-w-md mx-auto relative">
-        
-        <!-- STEP 1: Gọi tên cảm xúc (Affect Labeling) -->
-        <div id="zen-step-1" class="w-full space-y-6 text-center transition-all duration-300">
-          <div class="space-y-2">
-            <h2 class="text-xl font-bold text-gray-200">Bạn đang cảm thấy thế nào ngay lúc này?</h2>
-            <p class="text-xs text-gray-400 font-light">Hãy viết 1-2 từ để gọi tên cảm giác thực tại trong bạn.</p>
-          </div>
-          <div class="max-w-xs mx-auto">
-            <input type="text" id="zen-emotion-input" placeholder="Ví dụ: Ấm ức, Bực tức, Lo sợ..." class="w-full p-4 rounded-2xl bg-darkcard border border-darkborder text-center text-lg font-semibold text-gray-200 shadow-inner focus:outline-none focus:border-brandviolet transition-colors">
-          </div>
-          <button onclick="startZenBreathing()" class="py-3 px-8 bg-brandviolet hover:bg-violet-600 text-white font-medium rounded-xl text-sm transition-all duration-200 shadow-lg">
-            Bắt đầu ôm ấp cảm xúc
-          </button>
-        </div>
-
-        <!-- STEP 2: Ôm ấp cảm xúc bằng hơi thở (Breathing Cycle) -->
-        <div id="zen-step-2" class="w-full space-y-10 text-center transition-all duration-300 hidden">
-          <!-- Breathing circle container -->
-          <div class="relative w-64 h-64 mx-auto flex items-center justify-center">
-            <!-- Outermost breathing pulse circle -->
-            <div id="breathing-circle-glow" class="absolute inset-0 bg-brandviolet/10 rounded-full blur-xl scale-95 transition-all duration-[4000ms] ease-in-out"></div>
-            <!-- Inner breathing circle -->
-            <div id="breathing-circle" class="w-48 h-48 bg-gradient-to-br from-brandviolet/20 to-purple-950/40 border border-brandviolet/30 rounded-full flex flex-col items-center justify-center shadow-2xl scale-95 transition-all duration-[4000ms] ease-in-out">
-              <span id="breathing-timer" class="text-xs text-brandviolet font-semibold tracking-wider mb-1 uppercase">HÍT VÀO</span>
-              <span id="breathing-emotion" class="text-xl font-bold text-white capitalize">Cơn Giận</span>
-            </div>
-          </div>
-          
-          <!-- Guided prompts -->
-          <div class="space-y-2 max-w-sm mx-auto h-20 flex flex-col justify-center">
-            <p id="breathing-prompt" class="text-base text-gray-200 font-light leading-relaxed"></p>
-            <p id="breathing-cycle-counter" class="text-[10px] text-gray-500 uppercase tracking-widest font-sans">Chu kỳ: 1/5</p>
-          </div>
-        </div>
-
-        <!-- STEP 3: Buông bỏ & Chuông Thiền -->
-        <div id="zen-step-3" class="w-full space-y-8 text-center transition-all duration-300 hidden">
-          <div class="w-20 h-20 rounded-full bg-brandviolet/10 flex items-center justify-center mx-auto border border-brandviolet/20 mb-1 animate-pulse">
-            <i data-lucide="bell" class="w-10 h-10 text-brandviolet"></i>
-          </div>
-          <div class="space-y-3 max-w-sm mx-auto">
-            <h2 class="text-lg font-bold text-gray-200">Hãy cảm nhận tiếng ngân của chuông xoay...</h2>
-            <p class="text-xs text-gray-400 font-light leading-relaxed">
-              Cảm xúc của bạn đã được nhận biết và ôm ấp. Giờ hãy thả lỏng và nhìn nó tan biến vào hư không.
-            </p>
-            <div class="h-10 flex items-center justify-center mt-4">
-              <span id="zen-dissolving-word" class="text-xl font-bold text-brandviolet/80 uppercase tracking-widest transition-all duration-3000 ease-out scale-100 opacity-100"></span>
             </div>
           </div>
           
