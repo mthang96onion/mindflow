@@ -879,6 +879,14 @@
         const selected = shuffled.slice(0, 3);
         
         popupList.innerHTML = selected.map((log, index) => {
+          let aiText = '';
+          if (log.aiRecommendation) {
+            aiText = `
+              <div class="text-[11px] bg-brandviolet/10 p-2.5 rounded-lg border border-brandviolet/20 mt-2 text-brandviolet font-sans leading-relaxed">
+                <span class="font-bold">🧠 AI Khuyên:</span> ${log.aiRecommendation}
+              </div>
+            `;
+          }
           return `
             <div class="p-4 bg-darkbg rounded-xl border border-darkborder space-y-2">
               <div class="flex justify-between items-center text-xs">
@@ -890,9 +898,10 @@
               </p>
               ${log.storyDetail ? `
                 <div class="text-[11px] text-gray-500 bg-darkcard/50 p-2.5 rounded-lg border border-darkborder/50">
-                  <span class="font-semibold">Chi tiết bối cảnh:</span> ${log.storyDetail}
+                  <span class="font-semibold text-gray-400">Chi tiết bối cảnh:</span> ${log.storyDetail}
                 </div>
               ` : ''}
+              ${aiText}
             </div>
           `;
         }).join('');
@@ -1393,14 +1402,31 @@
         return;
       }
       
-      const log = getLogs().find(l => String(l.id) === String(logId));
-      if (!log) return;
+      const currentLogs = getLogs();
+      const logIndex = currentLogs.findIndex(l => String(l.id) === String(logId));
+      if (logIndex === -1) return;
+      const log = currentLogs[logIndex];
       
       const box = document.getElementById('event-analysis-box');
       const textContainer = document.getElementById('event-analysis-text');
       const apiUrl = localStorage.getItem('api_url');
       
       box.classList.remove('hidden');
+      
+      // Nếu đã có kết quả phân tích lưu sẵn, hiển thị ngay lập tức
+      if (log.aiExplanation && log.aiRecommendation) {
+        textContainer.innerHTML = `
+          <p class="font-medium text-rose-400">🧠 [Giải mã cơ chế tâm lý (Đã lưu)]:</p>
+          <p class="text-xs leading-relaxed text-gray-300">${log.aiExplanation}</p>
+          
+          <p class="font-medium text-emerald-400 mt-4">🎯 [Khuyến nghị hướng giải quyết]:</p>
+          <p class="text-xs bg-emerald-950/20 p-3 rounded-lg border border-emerald-900/30 font-semibold text-emerald-300 mt-1">
+            ${log.aiRecommendation}
+          </p>
+        `;
+        return;
+      }
+      
       textContainer.innerHTML = `
         <div class="flex items-center space-x-2 text-brandviolet animate-pulse justify-center py-4">
           <i data-lucide="loader" class="w-5 h-5 animate-spin"></i>
@@ -1424,6 +1450,10 @@
                 ${data.recommendation}
               </p>
             `;
+            // Cập nhật và lưu vào Local Storage
+            log.aiExplanation = data.explanation;
+            log.aiRecommendation = data.recommendation;
+            localStorage.setItem('logs', JSON.stringify(currentLogs));
           } else {
             showToast('Lỗi AI: ' + (data.error || 'Không xác định'), 'error');
             renderEventAnalysisFallback(log);

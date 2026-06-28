@@ -575,6 +575,15 @@ export default function App() {
     const log = logs.find(l => String(l.id) === String(selectedEventId));
     if (!log) return;
 
+    // Nếu đã có phân tích được lưu, hiển thị ngay lập tức không gọi API nữa
+    if (log.aiExplanation && log.aiRecommendation) {
+      setEventAnalysisData({
+        explanation: log.aiExplanation,
+        recommendation: log.aiRecommendation
+      });
+      return;
+    }
+
     setIsLoadingEventAnalysis(true);
     setEventAnalysisData(null);
 
@@ -585,6 +594,16 @@ export default function App() {
         if (data && !data.error) {
           setEventAnalysisData(data);
           setIsLoadingEventAnalysis(false);
+          
+          // Cập nhật và lưu vào Local Logs state
+          const updated = logs.map(l => {
+            if (String(l.id) === String(selectedEventId)) {
+              return { ...l, aiExplanation: data.explanation, aiRecommendation: data.recommendation };
+            }
+            return l;
+          });
+          setLogs(updated);
+          localStorage.setItem('logs', JSON.stringify(updated));
           return;
         }
       } catch (err) {
@@ -1164,6 +1183,11 @@ export default function App() {
                     {log.storyDetail && (
                       <div className="text-[11px] text-gray-500 bg-darkcard/50 p-2.5 rounded-lg border border-darkborder/50 font-light">
                         <span className="font-semibold text-gray-400">Chi tiết bối cảnh:</span> {log.storyDetail}
+                      </div>
+                    )}
+                    {log.aiRecommendation && (
+                      <div className="text-[11px] bg-brandviolet/10 p-2.5 rounded-lg border border-brandviolet/20 mt-2 text-brandviolet font-sans leading-relaxed">
+                        <span className="font-bold">🧠 AI Khuyên:</span> {log.aiRecommendation}
                       </div>
                     )}
                   </div>

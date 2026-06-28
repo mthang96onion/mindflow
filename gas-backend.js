@@ -76,7 +76,7 @@ function doPost(e) {
     // Nếu sheet chưa tồn tại, tự động tạo mới kèm header
     if (!sheet) {
       sheet = ss.insertSheet(SHEET_DAILY_LOGS);
-      sheet.appendRow(["id", "createdAt", "moodRating", "contextTag", "lessonNote", "storyDetail"]);
+      sheet.appendRow(["id", "createdAt", "moodRating", "contextTag", "lessonNote", "storyDetail", "aiExplanation", "aiRecommendation"]);
     }
     
     // Ghi dữ liệu dòng mới
@@ -86,7 +86,9 @@ function doPost(e) {
       postData.moodRating,
       postData.contextTag,
       postData.lessonNote,
-      postData.storyDetail || ""
+      postData.storyDetail || "",
+      postData.aiExplanation || "",
+      postData.aiRecommendation || ""
     ]);
     
     return getCorsResponse({ success: true, message: "Đã lưu thành công!" });
@@ -224,12 +226,55 @@ function handleAnalyzeEvent(log) {
       let rawText = resJson.candidates[0].content.parts[0].text.trim();
       if (rawText.startsWith("```json")) rawText = rawText.substring(7);
       if (rawText.endsWith("```")) rawText = rawText.substring(0, rawText.length - 3);
-      return getCorsResponse(JSON.parse(rawText.trim()));
+      
+      const parsed = JSON.parse(rawText.trim());
+      // Tự động ghi lại kết quả phân tích của AI vào Sheet
+      saveAnalysisToSheet(log.id, parsed.explanation, parsed.recommendation);
+      
+      return getCorsResponse(parsed);
     } else {
       return getCorsResponse({ error: "Lỗi từ Gemini API: " + JSON.stringify(resJson) });
     }
   } catch (err) {
     return getCorsResponse({ error: "Lỗi AI phân tích sự kiện: " + err.toString() });
+  }
+}
+
+/**
+ * Ghi đè kết quả phân tích AI vào đúng dòng trong Google Sheets
+ */
+function saveAnalysisToSheet(logId, explanation, recommendation) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(SHEET_DAILY_LOGS);
+    if (!sheet) return;
+    
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    const idCol = headers.indexOf("id");
+    let expCol = headers.indexOf("aiExplanation");
+    let recCol = headers.indexOf("aiRecommendation");
+    
+    // Nếu chưa có cột tiêu đề phân tích (bản sheet cũ), tự động thêm vào cuối
+    if (expCol === -1 || recCol === -1) {
+      const lastCol = headers.length;
+      sheet.getRange(1, lastCol + 1).setValue("aiExplanation");
+      sheet.getRange(1, lastCol + 2).setValue("aiRecommendation");
+      expCol = lastCol;
+      recCol = lastCol + 1;
+    }
+    
+    // Tìm dòng có ID tương ứng để cập nhật
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idCol]) === String(logId)) {
+        sheet.getRange(i + 1, expCol + 1).setValue(explanation);
+        sheet.getRange(i + 1, recCol + 1).setValue(recommendation);
+        break;
+      }
+    }
+  } catch (err) {
+    console.error("Lỗi ghi nhận phân tích AI vào Sheet: " + err.toString());
   }
 }
 
