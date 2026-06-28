@@ -179,7 +179,7 @@
 
           <!-- Lesson input -->
           <div class="space-y-2">
-            <label class="text-sm text-gray-400 block">Ghi chú 1 dòng (Bài học xương máu):</label>
+            <label id="label-lesson" class="text-sm text-gray-400 block">Ghi chú 1 dòng (Bài học xương máu):</label>
             <input type="text" id="input-lesson" placeholder="Ví dụ: Nói quá đà với hội A, bớt kỳ vọng..." class="w-full py-2.5 px-4 bg-darkbg border border-darkborder rounded-xl focus:border-brandblue focus:outline-none text-sm text-gray-200 transition-colors">
           </div>
 
@@ -606,27 +606,8 @@
         <button onclick="closeInstantAdviceModal()" class="w-full py-3 bg-brandred hover:bg-rose-600 text-white font-medium rounded-xl text-sm transition-all duration-200">
           Tôi đã thông não!
         </button>
-    </div>
-
-            </div>
-          </div>
-          
-          <div class="pt-4">
-            <button onclick="finishZenSession()" class="py-3 px-8 bg-brandviolet hover:bg-violet-600 text-white font-medium rounded-xl text-sm transition-all duration-200 shadow-lg">
-              Buông bỏ thành công
-            </button>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Outro message at bottom -->
-      <div class="w-full text-center pb-4 max-w-md mx-auto">
-        <p class="text-[10px] text-gray-600 uppercase tracking-widest font-sans font-light">Thở vào tâm tĩnh lặng • Thở ra miệng mỉm cười</p>
-      </div>
-
-    </div>
-
+  </div>
+  </div>
   </div>
 
   <!-- Toast Notification System -->
@@ -776,6 +757,19 @@
         5: "5/5 - Quá phấn khích / High năng lượng 🔥"
       };
       document.getElementById('mood-label').innerText = labels[val];
+      
+      const labelEl = document.getElementById('label-lesson');
+      const inputEl = document.getElementById('input-lesson');
+      if (val <= 2) {
+        labelEl.innerText = "Ghi chú 1 dòng (Bài học xương máu):";
+        inputEl.placeholder = "Ví dụ: Không đôi co lúc nóng giận, bớt kỳ vọng...";
+      } else if (val === 3) {
+        labelEl.innerText = "Ghi chú 1 dòng (Trạng thái cân bằng):";
+        inputEl.placeholder = "Ví dụ: Đầu óc thảnh thơi, không bận tâm chuyện vặt...";
+      } else {
+        labelEl.innerText = "Ghi chú 1 dòng (Neo hạnh phúc / Biết ơn):";
+        inputEl.placeholder = "Ví dụ: Trò chuyện rất kết nối với A, biết ơn vì ngày hôm nay...";
+      }
     }
 
     // Chọn bối cảnh giao tiếp

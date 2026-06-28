@@ -468,6 +468,19 @@ export default function App() {
 
   const { brakesCount, dumpsCount, highEnergyCount, lowEnergyCount, triggerText, zenMinutes, zenEmotionsStr } = computeStats();
 
+  let lessonLabel = "Ghi chú 1 dòng (Bài học xương máu):";
+  let lessonPlaceholder = "Ví dụ: Nói quá đà với hội A, bớt kỳ vọng...";
+  if (moodRating <= 2) {
+    lessonLabel = "Ghi chú 1 dòng (Bài học xương máu):";
+    lessonPlaceholder = "Ví dụ: Không đôi co lúc nóng giận, bớt kỳ vọng...";
+  } else if (Number(moodRating) === 3) {
+    lessonLabel = "Ghi chú 1 dòng (Trạng thái cân bằng):";
+    lessonPlaceholder = "Ví dụ: Đầu óc thảnh thơi, không bận tâm chuyện vặt...";
+  } else {
+    lessonLabel = "Ghi chú 1 dòng (Neo hạnh phúc / Biết ơn):";
+    lessonPlaceholder = "Ví dụ: Trò chuyện rất kết nối với A, biết ơn vì ngày hôm nay...";
+  }
+
   const renderSvgChart = () => {
     const chartLogs = logs.filter(l => l.contextTag !== 'Trước giờ G' && l.contextTag !== 'Xả não' && l.contextTag !== 'Chánh niệm');
     if (chartLogs.length === 0) return { path: '', points: [] };
@@ -681,12 +694,12 @@ export default function App() {
 
               {/* Lesson Input */}
               <div className="space-y-2">
-                <label className="text-sm text-gray-400 block">Ghi chú 1 dòng (Bài học xương máu):</label>
+                <label className="text-sm text-gray-400 block">{lessonLabel}</label>
                 <input 
                   type="text" 
                   value={lessonNote}
                   onChange={(e) => setLessonNote(e.target.value)}
-                  placeholder="Ví dụ: Nói quá đà với hội A, bớt kỳ vọng..." 
+                  placeholder={lessonPlaceholder} 
                   className="w-full py-2.5 px-4 bg-darkbg border border-darkborder rounded-xl focus:border-brandblue focus:outline-none text-sm text-gray-200 transition-colors"
                 />
               </div>
