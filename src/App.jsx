@@ -1209,9 +1209,14 @@ export default function App() {
             </div>
             <button 
               onClick={() => {
-                localStorage.setItem('api_url', apiUrl);
+                let cleaned = apiUrl.trim();
+                if (cleaned.indexOf('?') !== -1) {
+                  cleaned = cleaned.split('?')[0];
+                }
+                setApiUrl(cleaned);
+                localStorage.setItem('api_url', cleaned);
                 setShowSettings(false);
-                syncFromSheets(apiUrl);
+                syncFromSheets(cleaned);
               }}
               className="w-full py-2.5 bg-brandblue hover:bg-blue-600 text-white font-medium rounded-lg text-sm transition-colors"
             >

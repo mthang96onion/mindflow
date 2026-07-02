@@ -798,7 +798,10 @@
     }
 
     function saveSettings() {
-      const url = document.getElementById('settings-api-url').value.trim();
+      let url = document.getElementById('settings-api-url').value.trim();
+      if (url.indexOf('?') !== -1) {
+        url = url.split('?')[0];
+      }
       localStorage.setItem('api_url', url);
       toggleSettingsModal();
       showToast('Đã lưu cấu hình API!');
